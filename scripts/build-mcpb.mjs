@@ -25,8 +25,20 @@ const manifest = JSON.parse(await readFile(path.join(packageRoot, 'package.json'
 const version = manifest.version;
 
 /** The files the bundle carries. The layout has to match the source tree, because
- * the server resolves its vendored core relative to itself. */
-const CONTENT = ['src', 'vendor', 'py', 'package.json', 'package-lock.json', 'README.md', 'LICENSE', 'NOTICE.md', 'llms.txt'];
+ * the server resolves its vendored core relative to itself. The readme and its
+ * images travel with it, so the readme still renders inside the bundle. */
+const CONTENT = [
+  'src',
+  'vendor',
+  'py',
+  'assets',
+  'package.json',
+  'package-lock.json',
+  'README.md',
+  'LICENSE',
+  'NOTICE.md',
+  'llms.txt',
+];
 
 /** The tool names and descriptions the bundle advertises. */
 async function toolList() {

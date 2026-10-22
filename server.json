@@ -13,7 +13,7 @@
     {
       "registry_type": "mcpb",
       "identifier": "https://github.com/ghassenTn/stykanimate-mcp/releases/download/v0.1.0/stykanimate-mcp-0.1.0.mcpb",
-      "file_sha256": "afafd8f0c8673a058a410d8571b8efa69d3a32f26ac2b0756b487895f3ce8fb9",
+      "file_sha256": "0227708a82110adb6efb5e5e590fc1f1480bcbfce412d4e4d0bf8d85f2548ada",
       "version": "0.1.0",
       "transport": {
         "type": "stdio"
