@@ -330,6 +330,12 @@
   "assets": [
     "vendor/zstd/zstd.wasm"
   ],
+  "vendorFiles": [
+    "vendor/earcut.mjs",
+    "vendor/zstd/index.mjs",
+    "vendor/zstd/zstd.js",
+    "vendor/zstd/zstd.wasm"
+  ],
   "digest": "9290d27cb4cd4962793f8acc4e996df2ccc1abf921c5fa6fc26e40e4d929fccd",
   "python": [
     "backend/benchmark.py",

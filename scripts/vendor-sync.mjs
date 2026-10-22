@@ -131,7 +131,7 @@ async function digest(files, source) {
   return hash.digest('hex');
 }
 
-async function writeManifest(source, files, assets, external) {
+async function writeManifest(source, files, assets, vendorFiles, external) {
   const manifest = {
     upstream: 'https://github.com/filippocalippo/StykAnimate-App',
     sourceCommit: safeCommit(source),
@@ -140,7 +140,8 @@ async function writeManifest(source, files, assets, external) {
     externalModules: [...external].sort(),
     files: [...files].sort(),
     assets: [...assets].sort(),
-    digest: await digest(new Set([...files, ...assets]), source),
+    vendorFiles: [...vendorFiles].sort(),
+    digest: await digest(new Set([...files, ...assets, ...vendorFiles]), source),
   };
   await writeFile(path.join(vendorRoot, 'PROVENANCE.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   return manifest;
@@ -155,15 +156,12 @@ function safeCommit(source) {
 }
 
 async function main() {
-  if (!existsSync(path.join(sourceRoot, 'src', 'editor.mjs'))) {
-    throw new Error(`No StykAnimate source tree at ${sourceRoot}. Pass --source <path>.`);
-  }
-  const { files, externals } = await collectClosure(sourceRoot);
-  const assets = await collectAssets(sourceRoot, files);
-  const payload = new Set([...files, ...assets, ...VENDOR_FILES.filter(file => existsSync(path.join(sourceRoot, file)))]);
-  const python = await collectPython(sourceRoot);
+  const sourceAvailable = existsSync(path.join(sourceRoot, 'src', 'editor.mjs'));
 
   if (checkOnly) {
+    // The check must work without a checkout of the app, so it verifies the
+    // vendored copy against the digest the sync recorded. When the source is
+    // there, it also checks the source has not moved on.
     const manifestPath = path.join(vendorRoot, 'PROVENANCE.json');
     if (!existsSync(manifestPath)) {
       console.error('vendor: PROVENANCE.json is missing. Run node scripts/vendor-sync.mjs.');
@@ -171,15 +169,35 @@ async function main() {
       return;
     }
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-    const current = await digest(payload, sourceRoot);
-    if (current !== manifest.digest) {
-      console.error('vendor: the vendored core differs from the source tree. Run node scripts/vendor-sync.mjs.');
+    const copied = new Set([...manifest.files, ...manifest.assets, ...(manifest.vendorFiles ?? [])]);
+    const vendored = await digest(copied, vendorRoot);
+    if (vendored !== manifest.digest) {
+      console.error('vendor: the vendored copy no longer matches its recorded digest. Run node scripts/vendor-sync.mjs.');
       process.exitCode = 1;
       return;
     }
-    console.log('vendor: the vendored core matches the source tree.');
+    if (sourceAvailable) {
+      const current = await digest(copied, sourceRoot);
+      if (current !== manifest.digest) {
+        console.error('vendor: the vendored core differs from the source tree. Run node scripts/vendor-sync.mjs.');
+        process.exitCode = 1;
+        return;
+      }
+      console.log('vendor: the vendored core matches the source tree.');
+      return;
+    }
+    console.log(`vendor: the vendored copy matches its digest. The app source is not at ${sourceRoot}, so it was not compared.`);
     return;
   }
+
+  if (!sourceAvailable) {
+    throw new Error(`No StykAnimate source tree at ${sourceRoot}. Pass --source <path>.`);
+  }
+  const { files, externals } = await collectClosure(sourceRoot);
+  const assets = await collectAssets(sourceRoot, files);
+  const vendorFiles = VENDOR_FILES.filter(file => existsSync(path.join(sourceRoot, file)));
+  const payload = new Set([...files, ...assets, ...vendorFiles]);
+  const python = await collectPython(sourceRoot);
 
   await rm(vendorRoot, { recursive: true, force: true });
   await rm(path.join(packageRoot, 'py'), { recursive: true, force: true });
@@ -194,7 +212,7 @@ async function main() {
     await mkdir(path.dirname(destination), { recursive: true });
     await cp(path.join(sourceRoot, relative), destination);
   }
-  const manifest = await writeManifest(sourceRoot, files, assets, externals);
+  const manifest = await writeManifest(sourceRoot, files, assets, vendorFiles, externals);
   manifest.python = python;
   await writeFile(path.join(vendorRoot, 'PROVENANCE.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(
