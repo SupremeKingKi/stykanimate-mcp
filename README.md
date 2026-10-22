@@ -29,10 +29,22 @@ to a Pivot `.piv` or `.stk` file.
 
 ## Install
 
-From GitHub, which needs no account:
+From GitHub, which needs no account and no registry:
 
 ```sh
 npx -y github:ghassenTn/stykanimate-mcp
+```
+
+Pin a release:
+
+```sh
+npx -y github:ghassenTn/stykanimate-mcp#v0.1.0
+```
+
+Or install the tarball attached to a release:
+
+```sh
+npx -y https://github.com/ghassenTn/stykanimate-mcp/releases/download/v0.1.0/stykanimate-mcp-0.1.0.tgz
 ```
 
 Or clone and run it:
@@ -44,11 +56,8 @@ npm ci
 node src/index.js
 ```
 
-From npm, once the package is published:
-
-```sh
-npx -y stykanimate-mcp
-```
+The package is also prepared for the npm registry as `stykanimate-mcp`; see
+[Publishing](#publishing) once npm access is available.
 
 ### Connect a client
 
@@ -230,7 +239,7 @@ none.
 
 ## Publishing
 
-The package is published to npm as `stykanimate-mcp`.
+The package is prepared for the npm registry as `stykanimate-mcp`.
 
 ```sh
 npm ci
@@ -249,6 +258,9 @@ git tag v0.1.0 && git push origin v0.1.0
 ```
 
 The workflow needs an `NPM_TOKEN` secret in the repository settings.
+
+Until npm is available, the release tarball is the installable artifact: it is the same package
+the registry would serve, and it is attached to every release.
 
 ## Licence
 

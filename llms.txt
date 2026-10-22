@@ -10,6 +10,8 @@ rig, and changes the animation without a screen.
 npx -y github:ghassenTn/stykanimate-mcp
 ```
 
+Pin a release with `npx -y github:ghassenTn/stykanimate-mcp#v0.1.0`.
+
 Local stdio transport. `stykanimate-mcp --transport http --port 7331` serves Streamable HTTP on
 localhost. Python 3.10 or newer is needed only for Pivot files; the server starts the bundled
 codec on demand.
