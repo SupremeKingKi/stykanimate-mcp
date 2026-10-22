@@ -7,7 +7,8 @@
 <p align="center"><sub>
   Every frame above came from tool calls against this server — the figures, the poses, the
   timing and the layers. The project it came from is
-  <a href="assets/python-vs-java.styk">assets/python-vs-java.styk</a>.
+  <a href="assets/python-vs-java.styk">assets/python-vs-java.styk</a>, and it opens in the
+  StykAnimate app like any other project.
 </sub></p>
 
 An [MCP](https://modelcontextprotocol.io) server for [StykAnimate](https://stykanimate.com), the
