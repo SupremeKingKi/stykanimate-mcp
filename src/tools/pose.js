@@ -103,6 +103,12 @@ export function registerPoseTools(server, { store }) {
       const object = selectObject(editor, input.uid);
       const figure = editor.report.figure_types.find(entry => entry.figure_type_id === object.figure_type_id);
       const changes = [];
+      const notes = [];
+      if (input.root && object.join) {
+        // A joined figure takes its position from the figure it is joined to,
+        // so a root change on it has no visible effect.
+        notes.push('This figure is joined to another one, so its root position comes from that figure.');
+      }
 
       editor.beginDrag('Set pose');
       try {
@@ -147,8 +153,9 @@ export function registerPoseTools(server, { store }) {
         throw error;
       }
       return result(
-        `Set the pose of figure ${input.uid} in keyframe ${index}: ${changes.join(', ') || 'no changes'}.`,
-        { uid: input.uid, keyframe: index, changes, project: current.id },
+        `Set the pose of figure ${input.uid} in keyframe ${index}: ${changes.join(', ') || 'no changes'}.` +
+          (notes.length ? ` ${notes.join(' ')}` : ''),
+        { uid: input.uid, keyframe: index, changes, notes, project: current.id },
       );
     },
   );
