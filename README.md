@@ -228,6 +228,28 @@ recolour, undo, save and reopen.
 The tests need a Python interpreter for the codec test; that one test skips itself when there is
 none.
 
+## Publishing
+
+The package is published to npm as `stykanimate-mcp`.
+
+```sh
+npm ci
+npm run check && npm test
+npm run publish:package
+```
+
+`prepublishOnly` runs the checks and the tests, so a publish cannot ship a broken package. The
+version in `package.json` and the one in `server.json` have to move together, because the
+registry manifest names the exact package version.
+
+A tagged release publishes the package again with provenance:
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+The workflow needs an `NPM_TOKEN` secret in the repository settings.
+
 ## Licence
 
 GPL-3.0-or-later, the same licence as the StykAnimate app this server is built from. See
