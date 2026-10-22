@@ -47,6 +47,13 @@ Or install the tarball attached to a release:
 npx -y https://github.com/ghassenTn/stykanimate-mcp/releases/download/v0.1.0/stykanimate-mcp-0.1.0.tgz
 ```
 
+Or install the MCP bundle, which a client that supports one-click installs can
+open directly:
+
+```sh
+npx -y https://github.com/ghassenTn/stykanimate-mcp/releases/download/v0.1.0/stykanimate-mcp-0.1.0.mcpb
+```
+
 Or clone and run it:
 
 ```sh
@@ -259,8 +266,23 @@ git tag v0.1.0 && git push origin v0.1.0
 
 The workflow needs an `NPM_TOKEN` secret in the repository settings.
 
-Until npm is available, the release tarball is the installable artifact: it is the same package
-the registry would serve, and it is attached to every release.
+### The MCP bundle
+
+`npm run bundle` builds `build/stykanimate-mcp-<version>.mcpb`: a zip archive with the server,
+its runtime dependencies, the vendored editor core, the Python codec and a manifest that tells a
+client how to run it. It is the package type the official MCP registry accepts without a package
+registry, and clients that support one-click installs can open it directly.
+
+The bundle's hash goes in `server.json` under `packages[0].file_sha256`, so the registry and a
+client can both check the file they download. The build writes the hash next to the bundle:
+
+```sh
+npm run bundle
+cat build/stykanimate-mcp-0.1.0.mcpb.sha256
+```
+
+Until npm is available, the release tarball and the bundle are the installable artifacts: they
+are the same package the registry would serve, and they are attached to every release.
 
 ## Licence
 
