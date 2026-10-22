@@ -13,6 +13,7 @@
     "./server": "./src/server.js"
   },
   "files": [
+    "assets/",
     "src/",
     "vendor/stykanimate/",
     "py/",

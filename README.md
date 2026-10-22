@@ -1,5 +1,15 @@
 # StykAnimate MCP server
 
+<p align="center">
+  <img src="assets/python-vs-java.gif" alt="A stick figure animation built entirely through the StykAnimate MCP server" width="620">
+</p>
+
+<p align="center"><sub>
+  Every frame above came from tool calls against this server — the figures, the poses, the
+  timing and the layers. The project it came from is
+  <a href="assets/python-vs-java.styk">assets/python-vs-java.styk</a>.
+</sub></p>
+
 An [MCP](https://modelcontextprotocol.io) server for [StykAnimate](https://stykanimate.com), the
 open-source stick figure animation app. It lets an AI assistant open a StykAnimate or Pivot
 project, read its rig and timeline, and change the animation — without a screen, a GPU or a
@@ -26,6 +36,22 @@ step, and `history_undo` / `history_redo` walk back through them.
 
 **Write a project.** Save as a StykAnimate project, a portable figure or a movieclip, or export
 to a Pivot `.piv` or `.stk` file.
+
+## The example at the top
+
+The animation in the picture was built by asking this server to draw it, one tool call at a
+time. Nothing was drawn by hand and nothing was scripted against the file format.
+
+| Step | Tool |
+| --- | --- |
+| Put the two characters, the ball and the code lines on the stage | `figure_add` |
+| Pose them, with the arm and leg angles solved against the rig | `pose_set` |
+| Build the timeline — fast beats at 4 ticks, slow beats at 12 to 24 | `keyframe_edit`, `keyframe_timing` |
+| Name the layers `STAGE`, `PYTHON`, `JAVA`, `BOILERPLATE`, `TASK` | `layer_edit` |
+| Write the file and check it | `project_save`, `project_validate` |
+
+The result is [assets/python-vs-java.styk](assets/python-vs-java.styk): 14 keyframes, 129 ticks,
+24 fps, six figure definitions. It opens in the StykAnimate app like any other project.
 
 ## Install
 
