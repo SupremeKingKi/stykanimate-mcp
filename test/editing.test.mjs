@@ -138,6 +138,37 @@ test('a figure colour and a part colour can be changed', async t => {
   assert.equal(segment.thickness, 12);
 });
 
+test('a figure can be restyled after the project gained a keyframe', async t => {
+  const { client } = await connect();
+  t.after(async () => client.close());
+  const { folder } = await openProject(client);
+  t.after(async () => rm(folder, { recursive: true, force: true }));
+
+  // The startup project uses the advanced timeline, where the playback exposes
+  // fewer ticks than the project has keyframes.
+  const added = await call(client, 'keyframe_edit', { action: 'add', frame: 0 });
+  assert.equal(added.isError, undefined, added.content?.[0]?.text);
+
+  const listed = await call(client, 'figure_list');
+  const uid = listed.structuredContent.figures.items[0].uid;
+  const recoloured = await call(client, 'style_set', { target: 'figure', uid, color: '#00ff00' });
+  assert.equal(recoloured.isError, undefined, recoloured.content?.[0]?.text);
+  assert.equal(recoloured.structuredContent.frames.length, 2);
+});
+
+test('the evaluated rig names the keyframe it was read at', async t => {
+  const { client } = await connect();
+  t.after(async () => client.close());
+  const { folder } = await openProject(client);
+  t.after(async () => rm(folder, { recursive: true, force: true }));
+
+  const pose = await call(client, 'pose_evaluate', { frame: 0 });
+  assert.equal(pose.isError, undefined);
+  assert.equal(pose.structuredContent.keyframe, 0);
+  assert.match(pose.content[0].text, /Keyframe 0 \(tick 0/);
+  assert.equal(pose.structuredContent.figures[0].joints[0].name, 'Root');
+});
+
 test('the frame rate and the canvas can be changed', async t => {
   const { client } = await connect();
   t.after(async () => client.close());

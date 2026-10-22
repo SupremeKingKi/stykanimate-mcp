@@ -232,11 +232,11 @@ export function figureDefinition(report, figureTypeId) {
  * `joints` are the world positions of every handle; `segments` carry the
  * solved endpoints, so a model can reason about where a limb actually is.
  */
-export function poseReport(editor, { frameIndex, tick, uids = null }) {
+export function poseReport(editor, { keyframe, tick, uids = null }) {
   const report = editor.report;
   const rows = editor.timeline;
-  const index = Math.max(0, Math.min(rows.length - 1, frameIndex));
-  const row = rows.find(entry => entry.index === frameIndex) ?? rows[index];
+  const index = Math.max(0, Math.min(rows.length - 1, keyframe));
+  const row = rows.find(entry => entry.index === keyframe) ?? rows[index];
   const absoluteTick = tick ?? row?.start ?? 0;
   const frame = editor.seek(absoluteTick);
   const geometry = editor.geometry;
@@ -295,7 +295,7 @@ export function poseReport(editor, { frameIndex, tick, uids = null }) {
   }
 
   return {
-    keyframe: frameIndex,
+    keyframe,
     tick: absoluteTick,
     seconds: round(absoluteTick / (report.fps || 1), 3),
     figureCount: figures.length,

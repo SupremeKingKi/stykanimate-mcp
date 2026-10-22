@@ -167,9 +167,25 @@ export function registerLayerTools(server, { store }) {
             throw new ToolError(`Figure ${input.uid} is not in any keyframe.`, { code: 'unknown_figure' });
           }
           goToKeyframe(editor, frames[0]);
-          const options = { uids: [input.uid], indices: frames };
-          if (input.opacity !== undefined) options.opacity = input.opacity;
-          editor.setFigureColor(input.color, options);
+          const operation = { kind: 'recolor', mode: 'all' };
+          if (input.color !== undefined) operation.color = rgbBytes(input.color);
+          if (input.opacity !== undefined) operation.opacity = input.opacity;
+          if (editor.report._styk?.layerSheet) {
+            // An advanced timeline exposes its poses as cells, so the change
+            // has to name the ticks it reaches rather than the stored poses.
+            const ticks = frames
+              .map(index => editor.timeline.find(row => row.index === index)?.start)
+              .filter(tick => tick !== undefined);
+            if (!ticks.length) {
+              throw new ToolError(
+                `Figure ${input.uid} is not exposed by the playback timeline, so it cannot be restyled.`,
+                { code: 'not_exposed' },
+              );
+            }
+            editor.applyFigureRange(operation, { ticks, uids: [input.uid], label: 'Edit figure colors' });
+          } else {
+            editor.applyFigureRange(operation, { indices: frames, uids: [input.uid], label: 'Edit figure colors' });
+          }
           return result(
             `Restyled figure ${input.uid} in ${frames.length} keyframe(s).`,
             { uid: input.uid, frames, project: current.id },
