@@ -257,14 +257,17 @@ export function poseReport(editor, { frameIndex, tick, uids = null }) {
       scale: round(object.scale ?? 1),
       opacity: round(object.opacity ?? 1),
       joints: [...solved.joints.entries()]
-        .map(([handleId, joint]) => ({
-          handleId,
-          index: segments.findIndex(segment => segment.segment_id === handleId),
-          name: segments.find(segment => segment.segment_id === handleId)?.name ?? null,
-          parentHandleId: segments.find(segment => segment.segment_id === handleId)?.parent_id ?? null,
-          x: round(joint.x),
-          y: round(joint.y),
-        }))
+        .map(([handleId, joint]) => {
+          const segment = segments.find(entry => entry.segment_id === handleId);
+          return {
+            handleId,
+            index: segment ? segments.indexOf(segment) : null,
+            name: segment?.name ?? (handleId === 0 ? 'Root' : null),
+            parentHandleId: segment?.parent_id ?? null,
+            x: round(joint.x),
+            y: round(joint.y),
+          };
+        })
         .sort((a, b) => a.handleId - b.handleId),
       segments: (solved.segments ?? []).map(render => ({
         handleId: render.seg?.segment_id ?? null,
