@@ -132,14 +132,16 @@ A typical conversation goes: `capabilities` → `project_open` → `project_desc
 Two conventions matter:
 
 - **A frame number is a place on the timeline** — one of the positions the playhead moves through.
-  The pose and figure tools use it, because they act on what the animation shows. `project_timeline`
-  lists the positions, and the stored pose each one shows.
-- **A keyframe number in `keyframe_edit` and `keyframe_timing` is a stored pose**, one entry in the
-  project's pose list, because those tools add, remove and retime poses.
+  The pose and figure tools use it, because they act on what the animation shows. The "playback"
+  section of `project_timeline` lists those places, and their number is the frame number.
+- **A keyframe number in `keyframe_edit` and `keyframe_timing` is a stored pose**, one entry in
+  the project's pose list, because those tools add, remove and retime poses. The "keyframes"
+  section of `project_timeline` lists those, and says where each one is shown.
 
 On a project with one keyframe per moment the two are the same number, which is the case for
-every project imported from Pivot. A project with an advanced timeline can hold more poses than it
-shows, and there the two differ.
+every project imported from Pivot. A project with an advanced timeline can hold more poses than
+it shows, and there the two differ: a pose the playback does not reach has no place, and only
+the keyframe tools can name it.
 
 A **figure** is named by its instance id, and a **joint** by its handle id. Both come from
 `figure_list` and `figure_describe`.
@@ -150,17 +152,18 @@ StykAnimate has two timelines. The simple one is a list of keyframes, each holdi
 every figure, and it is what a project imported from Pivot uses. The advanced one is a sheet of
 cells that sample stored poses over spans, and it is what the app's own new projects use.
 
-The server works on both, but the sheet is the authority for what the animation shows, so a few
-results differ from the app:
+The server works on the stored poses the playback reaches. The sheet's own cells are not exposed,
+so a few results differ from the app:
 
 - `figure_list` reports the figures the sheet shows at the playhead, and lists the stored poses
   that hold each of them. A figure the sheet added appears in the first list and in none of the
   second.
-- The pose tools act on the position they are given, so they change what the sheet shows.
+- The pose and figure tools act on the place they are given, so they change what the sheet
+  shows.
 - `style_set` on a figure names the ticks the playback reaches, because that is what a sheet
   holds.
-- `keyframe_edit` and `keyframe_timing` name stored poses. A pose the sheet does not show is
-  stored but never appears.
+- A keyframe the playback does not reach can still be added, retimed and removed through the
+  keyframe tools, but nothing shows it.
 - `project_describe` reports `advancedTimeline: true` when a project uses one.
 
 Everything else — opening, describing, transforming, recolouring, saving — behaves the same in

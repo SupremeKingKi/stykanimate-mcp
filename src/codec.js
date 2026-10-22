@@ -113,7 +113,19 @@ export class CodecService {
     const port = await freePort();
     const child = spawn(
       python.command,
-      [...python.args, SERVER_SCRIPT, '--host', '127.0.0.1', '--port', String(port), '--workspace', packageRoot],
+      [
+        ...python.args,
+        SERVER_SCRIPT,
+        '--host',
+        '127.0.0.1',
+        '--port',
+        String(port),
+        '--workspace',
+        packageRoot,
+        // The codec stops when this process closes its standard input, so a
+        // session that ends cannot leave a Python process behind.
+        '--exit-on-stdin-close',
+      ],
       {
         cwd: CODEC_ROOT,
         stdio: ['pipe', 'pipe', 'pipe'],

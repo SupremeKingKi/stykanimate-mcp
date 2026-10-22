@@ -26,10 +26,10 @@ export function project(store, input) {
  * A stored pose is one entry in the project's pose list. It is what the
  * keyframe tools address, because they add, remove and retime poses.
  */
-export function storedIndex(editor, input, { fallback = null } = {}) {
+export function storedIndex(editor, input) {
   if (input?.frame !== undefined && input?.frame !== null) {
     const index = Math.trunc(input.frame);
-    if (!Number.isFinite(index) || index < 0 || index >= editor.report.keyframes.length) {
+    if (!Number.isInteger(index) || index < 0 || index >= editor.report.keyframes.length) {
       throw new ToolError(
         `There is no keyframe ${index}. The project has ${editor.report.keyframes.length} keyframes ` +
           `(0 to ${editor.report.keyframes.length - 1}).`,
@@ -38,8 +38,7 @@ export function storedIndex(editor, input, { fallback = null } = {}) {
     }
     return index;
   }
-  if (fallback !== null) return fallback;
-  return editor.frameIndex;
+  return nativeIndex(editor, positionOf(editor, editor.frameIndex) ?? 0);
 }
 
 /**
@@ -50,10 +49,10 @@ export function storedIndex(editor, input, { fallback = null } = {}) {
  * animation shows. On a project with one keyframe per moment a position is
  * also the number of the stored pose it shows.
  */
-export function keyframeIndex(editor, input, { fallback = null } = {}) {
+export function keyframeIndex(editor, input) {
   if (input?.frame !== undefined && input?.frame !== null) {
     const position = Math.trunc(input.frame);
-    if (!Number.isFinite(position) || position < 0 || position >= editor.timeline.length) {
+    if (!Number.isInteger(position) || position < 0 || position >= editor.timeline.length) {
       throw new ToolError(
         `There is no keyframe ${position}. The animation has ${editor.timeline.length} keyframes ` +
           `(0 to ${editor.timeline.length - 1}).`,
@@ -64,16 +63,25 @@ export function keyframeIndex(editor, input, { fallback = null } = {}) {
   }
   if (input?.tick !== undefined && input?.tick !== null) {
     const tick = Math.trunc(input.tick);
-    if (!Number.isFinite(tick) || tick < 0 || tick >= Math.max(1, editor.totalTicks)) {
+    if (!Number.isInteger(tick) || tick < 0 || tick >= Math.max(1, editor.totalTicks)) {
       throw new ToolError(`Tick ${tick} is outside the animation (0 to ${Math.max(0, editor.totalTicks - 1)}).`, {
         code: 'bad_tick',
       });
     }
-    const row = editor.timeline.find(entry => entry.start <= tick);
-    return row ? editor.timeline.indexOf(row) : 0;
+    return positionAtTick(editor, tick);
   }
-  if (fallback !== null) return fallback;
-  return editor.frameIndex;
+  // The playhead's tick is the one thing that always names a place on the
+  // timeline, whether the editor last moved it by a tick or by a keyframe.
+  return positionAtTick(editor, editor.tick);
+}
+
+/** The position the timeline is at for a tick. */
+export function positionAtTick(editor, tick) {
+  let position = 0;
+  editor.timeline.forEach((row, index) => {
+    if (row.start <= tick) position = index;
+  });
+  return position;
 }
 
 /** The stored pose a playback position shows. */
@@ -90,6 +98,22 @@ export function nativeIndices(editor, positions) {
 export function positionOf(editor, stored) {
   const position = editor.timeline.findIndex(entry => entry.index === stored);
   return position < 0 ? null : position;
+}
+
+/**
+ * The range a command that works across frames should act on.
+ *
+ * A project with one keyframe per moment takes the stored poses. A project
+ * with an advanced timeline takes the ticks the playback reaches, because that
+ * is what its sheet holds.
+ */
+export function rangeOptions(editor, positions) {
+  if (editor.report._styk?.layerSheet) {
+    return {
+      ticks: positions.map(position => editor.timeline[position]?.start).filter(tick => tick !== undefined),
+    };
+  }
+  return { indices: nativeIndices(editor, positions) };
 }
 
 /** The playback tick a position starts at. */

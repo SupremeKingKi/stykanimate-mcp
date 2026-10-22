@@ -8,7 +8,7 @@
 import { z } from 'zod/v4';
 import { figureDefinition, figureRows, paginate, DEFAULT_LIMIT } from '../summary.js';
 import { ToolError } from '../errors.js';
-import { degrees, goToKeyframe, keyframeIndex, nativeIndices, project, result, selectObject } from './shared.js';
+import { degrees, goToKeyframe, keyframeIndex, nativeIndices, project, rangeOptions, result, selectObject } from './shared.js';
 
 const projectField = z
   .string()
@@ -74,7 +74,17 @@ export function registerFigureTools(server, { store }) {
       }
       const index = keyframeIndex(editor, input);
       goToKeyframe(editor, index);
-      const instance = input.uid === undefined ? null : selectObject(editor, input.uid, { required: false });
+      let instance = null;
+      if (input.uid !== undefined) {
+        instance = selectObject(editor, input.uid, { required: false });
+        if (!instance) {
+          const here = (editor.selectionFrame ?? editor.frame).objects.map(entry => entry.unique_id);
+          throw new ToolError(
+            `Figure ${input.uid} is not in keyframe ${index}. Figures there: ${here.length ? here.join(', ') : 'none'}.`,
+            { code: 'unknown_figure' },
+          );
+        }
+      }
       const typeId = instance ? instance.figure_type_id : input.figureTypeId;
       const definition = figureDefinition(editor.report, typeId);
       if (!definition) {
@@ -103,7 +113,8 @@ export function registerFigureTools(server, { store }) {
       }
       return result(
         `${definition.name ?? `Figure ${typeId}`}: ${definition.segmentCount} joints` +
-          (instance ? `, instance ${instance.unique_id} at (${Math.round(instance.root_x)}, ${Math.round(instance.root_y)})` : ''),
+          (instance ? `, instance ${instance.unique_id} at (${Math.round(instance.root_x)}, ${Math.round(instance.root_y)})` : '') +
+          ` in keyframe ${index}.`,
         data,
       );
     },
@@ -170,7 +181,7 @@ export function registerFigureTools(server, { store }) {
       const source = keyframeIndex(editor, input);
       goToKeyframe(editor, source);
       selectObject(editor, input.uid);
-      const options = { offset: input.offset ?? 24 };
+      const options = { offset: input.offset ?? 24, uids: [input.uid] };
       const outcome = editor.duplicateFiguresInFrames(nativeIndices(editor, [source]), options);
       const copy = outcome.insertedUids?.[0] ?? editor.selectedUid;
       return result(`Duplicated figure ${input.uid} into keyframe ${source} as uid ${copy}.`, {
@@ -200,13 +211,24 @@ export function registerFigureTools(server, { store }) {
     async input => {
       const current = project(store, input);
       const editor = current.editor;
-      const indices = input.frames ?? [keyframeIndex(editor, input)];
-      for (const index of indices) {
-        if (index < 0 || index >= editor.report.keyframes.length) {
-          throw new ToolError(`There is no keyframe ${index}.`, { code: 'bad_frame' });
+      const positions = input.frames ?? [keyframeIndex(editor, input)];
+      for (const position of positions) {
+        if (position < 0 || position >= editor.timeline.length) {
+          throw new ToolError(
+            `There is no keyframe ${position}. The animation has ${editor.timeline.length} keyframes ` +
+              `(0 to ${editor.timeline.length - 1}).`,
+            { code: 'bad_frame' },
+          );
         }
       }
-      const outcome = editor.deleteFiguresInFrames(nativeIndices(editor, indices));
+      if (!figureAppears(editor, input.uid, positions)) {
+        throw new ToolError(
+          `Figure ${input.uid} is not in ${positions.length === 1 ? 'that keyframe' : 'those keyframes'}. ` +
+            'Use figure_list to see the figures that are there.',
+          { code: 'unknown_figure' },
+        );
+      }
+      const outcome = editor.deleteFiguresInFrames(nativeIndices(editor, positions), { uids: [input.uid] });
       return result(`Removed figure ${input.uid} from ${outcome.changedFrames} keyframe(s).`, {
         uid: input.uid,
         changedFrames: outcome.changedFrames,
@@ -258,60 +280,98 @@ export function registerFigureTools(server, { store }) {
       if (!uids.length) {
         throw new ToolError('Give a figure uid to transform.', { code: 'missing_target' });
       }
-      const indices = input.frames ?? [keyframeIndex(editor, input)];
-      goToKeyframe(editor, indices[0]);
-      editor.selectMany(uids);
+      const positions = input.frames ?? [keyframeIndex(editor, input)];
+      for (const position of positions) {
+        if (position < 0 || position >= editor.timeline.length) {
+          throw new ToolError(
+            `There is no keyframe ${position}. The animation has ${editor.timeline.length} keyframes ` +
+              `(0 to ${editor.timeline.length - 1}).`,
+            { code: 'bad_frame' },
+          );
+        }
+      }
+      goToKeyframe(editor, positions[0]);
+      const selected = editor.selectMany(uids);
+      if (!selected.length) {
+        throw new ToolError(
+          `None of the figures ${uids.join(', ')} is in keyframe ${positions[0]}. ` +
+            'Use figure_list to see the figures that are there.',
+          { code: 'unknown_figure' },
+        );
+      }
+      const range = rangeOptions(editor, positions);
+      const frames = range.indices ?? range.ticks ?? [];
 
+      let changed = 0;
       switch (input.action) {
         case 'move': {
           const dx = input.dx ?? 0;
           const dy = input.dy ?? 0;
-          editor.moveSelectionInFrames(dx, dy, nativeIndices(editor, indices));
+          changed = editor.moveSelectionInFrames(dx, dy, nativeIndices(editor, positions));
           break;
         }
         case 'rotate': {
           if (input.degrees === undefined) throw new ToolError('Give the angle in degrees.', { code: 'missing_value' });
-          editor.rotateFiguresInFrames(degrees(input.degrees), nativeIndices(editor, indices));
+          changed = editor.rotateFiguresInFrames(degrees(input.degrees), frames).changedFrames;
           break;
         }
         case 'scale': {
           if (input.factor === undefined) throw new ToolError('Give the size factor.', { code: 'missing_value' });
-          editor.scaleFiguresInFrames(input.factor, nativeIndices(editor, indices), { relative: true });
+          changed = editor.scaleFiguresInFrames(input.factor, frames, { relative: true }).changedFrames;
           break;
         }
         case 'mirror': {
-          editor.mirrorFiguresInFrames(input.axis ?? 'horizontal', nativeIndices(editor, indices));
+          if (!input.axis || !['horizontal', 'vertical'].includes(input.axis)) {
+            throw new ToolError('Mirroring needs axis "horizontal" or "vertical".', { code: 'missing_value' });
+          }
+          changed = editor.mirrorFiguresInFrames(input.axis, frames).changedFrames;
           break;
         }
         case 'align': {
-          if (!input.axis || !input.edge) {
-            throw new ToolError('Aligning needs an axis ("x" or "y") and an edge ("start", "center" or "end").', {
-              code: 'missing_value',
-            });
+          if (!input.axis || !['x', 'y'].includes(input.axis)) {
+            throw new ToolError('Aligning needs axis "x" or "y".', { code: 'missing_value' });
           }
-          editor.alignFiguresInFrames(input.axis, input.edge, nativeIndices(editor, indices));
+          if (!input.edge) {
+            throw new ToolError('Aligning needs an edge: "start", "center" or "end".', { code: 'missing_value' });
+          }
+          changed = editor.alignFiguresInFrames(input.axis, input.edge, frames).changedFrames;
           break;
         }
         case 'center': {
-          editor.centerFiguresInFrames(nativeIndices(editor, indices));
+          changed = editor.centerFiguresInFrames(frames).changedFrames;
           break;
         }
         case 'order': {
           if (!input.direction) throw new ToolError('Give a draw order direction.', { code: 'missing_value' });
           const direction =
             input.direction === 'front' ? 'front' : input.direction === 'back' ? 'back' : input.direction === 'up' ? 1 : -1;
-          editor.orderFiguresInFrames(direction, nativeIndices(editor, indices));
+          changed = editor.orderFiguresInFrames(direction, frames).changedFrames;
           break;
         }
         default:
           throw new ToolError(`Unknown transform "${input.action}".`, { code: 'bad_action' });
       }
-      return result(`Applied ${input.action} to ${uids.length} figure(s) across ${indices.length} keyframe(s).`, {
-        action: input.action,
-        uids,
-        frameIndices: indices,
-        project: current.id,
-      });
+      return result(
+        changed
+          ? `Applied ${input.action} to ${selected.length} figure(s) across ${positions.length} keyframe(s).`
+          : `The ${input.action} changed nothing.`,
+        { action: input.action, uids: selected.map(entry => entry.unique_id), frames: positions, changedFrames: changed },
+      );
     },
   );
+}
+
+/** Whether a figure is shown in any of the given keyframes. */
+function figureAppears(editor, uid, positions) {
+  const playhead = editor.tick;
+  try {
+    return positions.some(position => {
+      const row = editor.timeline[position];
+      if (!row) return false;
+      const frame = editor.seek(row.start);
+      return Boolean(frame.objects?.some(object => object.unique_id === uid));
+    });
+  } finally {
+    editor.seek(playhead);
+  }
 }

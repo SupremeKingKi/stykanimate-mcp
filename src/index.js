@@ -85,19 +85,35 @@ async function main() {
   }
 
   const session = createSession({ pivot: options.pivot, log });
+  // The codec is a child process. It must not outlive the session, whether
+  // the session ends by a signal or by the client closing the connection.
+  let stopping = null;
+  const shutdown = () => {
+    if (!stopping) {
+      stopping = session.codec
+        ?.stop()
+        .catch(() => {})
+        .finally(() => process.exit(0));
+    }
+    return stopping ?? Promise.resolve();
+  };
+
   if (options.transport === 'stdio') {
     await serveStdio(() => createServer({ ...session, log }));
     log('serving on stdio');
+    // The transport owns the standard input; when the client closes it, the
+    // session is over and the process must go with it.
+    process.stdin.on('end', shutdown);
+    process.stdin.on('close', shutdown);
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
     return;
   }
+
   const server = await serveHttp(options, session);
-  const shutdown = async () => {
-    server.close();
-    await session.codec?.stop();
-    process.exit(0);
-  };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+  server.on('close', shutdown);
 }
 
 main().catch(error => {

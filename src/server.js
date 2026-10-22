@@ -1,7 +1,7 @@
 /**
  * The server: tool registration, resources and the session it holds.
  */
-import { McpServer } from '@modelcontextprotocol/server';
+import { McpServer, ResourceTemplate } from '@modelcontextprotocol/server';
 import { z } from 'zod/v4';
 import { CodecService } from './codec.js';
 import { ProjectStore } from './session.js';
@@ -28,6 +28,9 @@ const VERSION = '0.1.0';
  * @param {CodecService|null} [options.codec] The Python codec, for Pivot files.
  */
 export function createServer({ store, codec = null, log = () => {} } = {}) {
+  if (!store) {
+    throw new Error('createServer needs a session. Build one with createSession().');
+  }
   const server = new McpServer({ name: 'stykanimate', version: VERSION });
   const context = { store, codec, log };
   // Every tool answers with a tool result rather than a protocol fault, so a
@@ -77,7 +80,7 @@ function registerCapabilityTools(server, { store, codec }) {
         format: project.kind,
         dirty: project.dirty,
         keyframes: project.editor.report.keyframes.length,
-        figures: project.editor.report.figure_types.length,
+        figureDefinitions: project.editor.report.figure_types.length,
       }));
       return {
         content: [
@@ -97,8 +100,7 @@ function registerCapabilityTools(server, { store, codec }) {
           pivotCodec: Boolean(codec),
           pythonCodecRunning: Boolean(codec?.running),
           openProjects: projects,
-        },
-      };
+        },      };
     },
   );
 }
@@ -125,7 +127,17 @@ function registerResources(server, { store }) {
 
   server.registerResource(
     'project-document',
-    'stykanimate://projects/{project}/document',
+    new ResourceTemplate('stykanimate://projects/{project}/document', {
+      list: async () => ({
+        resources: store.list().map(project => ({
+          uri: `stykanimate://projects/${project.id}/document`,
+          name: `${project.name} document`,
+          title: `${project.name} document`,
+          description: 'The editable document of the project.',
+          mimeType: 'application/json',
+        })),
+      }),
+    }),
     {
       title: 'Project document',
       description:
@@ -149,7 +161,17 @@ function registerResources(server, { store }) {
 
   server.registerResource(
     'project-pose',
-    'stykanimate://projects/{project}/pose',
+    new ResourceTemplate('stykanimate://projects/{project}/pose', {
+      list: async () => ({
+        resources: store.list().map(project => ({
+          uri: `stykanimate://projects/${project.id}/pose`,
+          name: `${project.name} rig`,
+          title: `${project.name} rig`,
+          description: 'The solved rig of the project at the playhead.',
+          mimeType: 'application/json',
+        })),
+      }),
+    }),
     {
       title: 'Solved rig',
       description: 'The solved rig of a project at one tick: joint positions, segment endpoints and IK state.',
@@ -158,7 +180,7 @@ function registerResources(server, { store }) {
     async (uri, { project, tick } = {}) => {
       const target = store.require(project);
       const report = poseReport(target.editor, {
-        frameIndex: target.editor.frameIndex,
+        keyframe: target.editor.frameIndex,
         tick: tick === undefined ? undefined : Number(tick),
       });
       return {

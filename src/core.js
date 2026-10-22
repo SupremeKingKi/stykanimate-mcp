@@ -13,6 +13,3 @@ export {
 } from '../vendor/stykanimate/src/native-container.mjs';
 export { nativeFigureDocument } from '../vendor/stykanimate/src/native-figure.mjs';
 export { createStartupDocument } from '../vendor/stykanimate/src/startup-document.mjs';
-export { emptyDocument } from '../vendor/stykanimate/src/demo.mjs';
-export { evaluatedFrame, timeline } from '../vendor/stykanimate/src/pivot/geometry.mjs';
-export { validateScene } from '../vendor/stykanimate/src/pivot/model.mjs';

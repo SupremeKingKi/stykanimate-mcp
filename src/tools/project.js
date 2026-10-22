@@ -27,7 +27,8 @@ function withExtension(target, format) {
   return extension ? `${target.slice(0, -extension.length)}.${format}` : `${target}.${format}`;
 }
 
-export function registerProjectTools(server, { store }) {  server.registerTool(
+export function registerProjectTools(server, { store }) {
+  server.registerTool(
     'project_open',
     {
       title: 'Open a project',
@@ -205,28 +206,31 @@ export function registerProjectTools(server, { store }) {  server.registerTool(
     {
       title: 'Show the timeline',
       description:
-        'List the keyframes of the open project: their number, how long they last, how many figures they hold, ' +
-        'their background and camera, and where they sit on the playback timeline. ' +
-        'Use it to find the keyframe number a later tool needs. ' +
-        'The "playback" section is the separate list of ticks the playhead moves through.',
+        'List the timeline of the open project. The "playback" section is the list of places the playhead moves ' +
+        'through: their number is the frame number the pose and figure tools take. The "keyframes" section is the ' +
+        'list of stored poses, with the place each one is shown at. ' +
+        'Give "fromTick" and "toTick" to narrow the playback list.',
       inputSchema: z.object({
         project: projectField,
-        fromTick: z.number().int().optional().describe('Only keyframes starting at or after this tick.'),
-        toTick: z.number().int().optional().describe('Only keyframes starting at or before this tick.'),
+        fromTick: z.number().int().optional().describe('Only places starting at or after this tick.'),
+        toTick: z.number().int().optional().describe('Only places starting at or before this tick.'),
         limit: limitField,
       }),
       annotations: { readOnlyHint: true, idempotentHint: true },
     },
     async input => {
       const current = project(store, input);
-      const rows = keyframeRows(current.editor, { from: input.fromTick ?? 0, to: input.toTick ?? Infinity });
+      const rows = keyframeRows(current.editor);
       const page = paginate(rows, { limit: input.limit });
+      const playback = paginate(playbackRows(current.editor, { from: input.fromTick ?? 0, to: input.toTick ?? Infinity }), {
+        limit: input.limit,
+      });
       return result(
-        `${page.returned} of ${page.total} keyframes · ${current.editor.report.fps} fps · ` +
-          `${current.editor.totalTicks} ticks total.`,
+        `${playback.returned} of ${playback.total} places on the timeline, ${page.total} stored poses · ` +
+          `${current.editor.report.fps} fps · ${current.editor.totalTicks} ticks total.`,
         {
+          playback,
           keyframes: page,
-          playback: playbackRows(current.editor),
           fps: current.editor.report.fps,
           totalTicks: current.editor.totalTicks,
         },
@@ -251,7 +255,24 @@ export function registerProjectTools(server, { store }) {  server.registerTool(
     async input => {
       const current = project(store, input);
       if (input.frame === undefined && input.tick === undefined) {
-        throw new ToolError('Give a frame number or a tick to move to.', { code: 'missing_target' });
+        throw new ToolError('Give a keyframe number or a tick to move to.', { code: 'missing_target' });
+      }
+      if (input.tick !== undefined && input.tick !== null) {
+        // A tick request lands between keyframes, so the playhead goes there
+        // rather than to the start of the keyframe it falls in.
+        const tick = Math.trunc(input.tick);
+        if (!Number.isInteger(tick) || tick < 0 || tick >= Math.max(1, current.editor.totalTicks)) {
+          throw new ToolError(
+            `Tick ${tick} is outside the animation (0 to ${Math.max(0, current.editor.totalTicks - 1)}).`,
+            { code: 'bad_tick' },
+          );
+        }
+        current.editor.seek(tick);
+        return result(`Playhead at tick ${current.editor.tick}.`, {
+          tick: current.editor.tick,
+          keyframe: current.editor.frameIndex,
+          project: current.id,
+        });
       }
       const index = keyframeIndex(current.editor, input);
       goToKeyframe(current.editor, index);

@@ -145,7 +145,11 @@ export function registerLayerTools(server, { store }) {
         color: z
           .union([z.string(), z.array(z.number().int().min(0).max(255))])
           .optional()
-          .describe('The new colour, as "#rrggbb" or as three RGB bytes.'),
+          .describe(
+            'The new colour. For a figure, a part or the scene: "#rrggbb" or three RGB bytes. ' +
+              'For a layer: a palette name (blue, violet, rose, orange, green, teal); ' +
+              'a colour is matched to the nearest one.',
+          ),
         opacity: z.number().min(0).max(1).optional().describe('The new opacity, from 0 to 1.'),
         thickness: z.number().min(0).optional().describe('For "part": the new thickness of the segment.'),
       }),
@@ -229,14 +233,14 @@ export function registerLayerTools(server, { store }) {
         case 'layer': {
           if (!input.layerId) throw new ToolError('Give the layer to restyle.', { code: 'missing_target' });
           if (input.color === undefined) throw new ToolError('Give the new layer colour.', { code: 'missing_value' });
-          editor.setLayerColor([input.layerId], input.color);
-          return result(`Set the colour of the layer ${input.layerId}.`, {
+          const colour = layerColour(input.color);
+          editor.setLayerColor([input.layerId], colour);
+          return result(`Set the colour of the layer ${input.layerId} to ${colour}.`, {
             layerId: input.layerId,
-            color: input.color,
+            color: colour,
             project: current.id,
           });
-        }
-        case 'scene': {
+        }        case 'scene': {
           if (input.color === undefined) throw new ToolError('Give the new scene colour.', { code: 'missing_value' });
           const [r, g, b] = rgbBytes(input.color);
           editor.setSceneColor((0xff << 24 | (r << 16) | (g << 8) | b) >>> 0, { indices: [index] });
@@ -251,6 +255,39 @@ export function registerLayerTools(server, { store }) {
       }
     },
   );
+}
+
+/** The colours a layer can take. */
+const LAYER_COLORS = Object.freeze({
+  blue: '#3399ee',
+  violet: '#9966dd',
+  rose: '#df6690',
+  orange: '#d99035',
+  green: '#43a878',
+  teal: '#36a8b5',
+});
+
+/**
+ * The palette name for a layer colour.
+ *
+ * A layer takes one of the app's palette colours. A name is used as it is; a
+ * colour is matched to the nearest one.
+ */
+function layerColour(color) {
+  if (typeof color === 'string' && Object.hasOwn(LAYER_COLORS, color)) return color;
+  const [r, g, b] = rgbBytes(color);
+  let best = null;
+  let bestDistance = Infinity;
+  for (const [name, hex] of Object.entries(LAYER_COLORS)) {
+    const value = Number.parseInt(hex.slice(1), 16);
+    const distance =
+      ((value >> 16) - r) ** 2 + (((value >> 8) & 255) - g) ** 2 + ((value & 255) - b) ** 2;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = name;
+    }
+  }
+  return best;
 }
 
 /** The playback positions a figure instance appears in. */

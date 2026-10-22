@@ -42,9 +42,20 @@ export function registerTimelineTools(server, { store }) {
           const position = positionOf(editor, stored);
           if (position !== null) goToKeyframe(editor, position);
           editor.addFrame({ blank: Boolean(input.blank) });
+          const added = editor.report.keyframes.length - 1;
+          const exposed = positionOf(editor, added);
           return result(
-            `Added a keyframe after keyframe ${stored}. The project now has ${editor.report.keyframes.length} keyframes.`,
-            { addedAfter: stored, keyframes: editor.report.keyframes.length, project: current.id },
+            exposed === null
+              ? `Added a keyframe after keyframe ${stored}. The playback does not show it, so it is only ` +
+                'reachable through the keyframe tools.'
+              : `Added a keyframe after keyframe ${stored}. The project now has ${editor.report.keyframes.length} keyframes.`,
+            {
+              addedAfter: stored,
+              keyframe: added,
+              position: exposed,
+              keyframes: editor.report.keyframes.length,
+              project: current.id,
+            },
           );
         }
         case 'delete': {
@@ -54,10 +65,10 @@ export function registerTimelineTools(server, { store }) {
               throw new ToolError(`There is no keyframe ${frame}.`, { code: 'bad_frame' });
             }
           }
-          editor.deleteFrames(frames);
+          const changed = editor.deleteFrames(frames);
           return result(
-            `Deleted ${frames.length} keyframe(s). The project now has ${editor.report.keyframes.length} keyframes.`,
-            { deleted: frames, keyframes: editor.report.keyframes.length, project: current.id },
+            `Deleted ${changed} keyframe(s). The project now has ${editor.report.keyframes.length} keyframes.`,
+            { deleted: changed, keyframes: editor.report.keyframes.length, project: current.id },
           );
         }
         case 'duplicate': {
@@ -67,10 +78,10 @@ export function registerTimelineTools(server, { store }) {
               throw new ToolError(`There is no keyframe ${frame}.`, { code: 'bad_frame' });
             }
           }
-          editor.insertDuplicateFrames(frames);
+          const changed = editor.insertDuplicateFrames(frames);
           return result(
-            `Duplicated ${frames.length} keyframe(s). The project now has ${editor.report.keyframes.length} keyframes.`,
-            { duplicated: frames, keyframes: editor.report.keyframes.length, project: current.id },
+            `Duplicated ${changed} keyframe(s). The project now has ${editor.report.keyframes.length} keyframes.`,
+            { duplicated: changed, keyframes: editor.report.keyframes.length, project: current.id },
           );
         }
         case 'move': {

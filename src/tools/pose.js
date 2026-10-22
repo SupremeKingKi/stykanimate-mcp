@@ -9,7 +9,7 @@
 import { z } from 'zod/v4';
 import { poseReport } from '../summary.js';
 import { ToolError } from '../errors.js';
-import { degrees, goToKeyframe, keyframeIndex, nativeIndices, project, result, selectJoint, selectObject } from './shared.js';
+import { degrees, goToKeyframe, keyframeIndex, project, rangeOptions, result, selectJoint, selectObject } from './shared.js';
 
 const projectField = z
   .string()
@@ -50,7 +50,6 @@ export function registerPoseTools(server, { store }) {
       }
       const summary = report.figures
         .map(figure => {
-          const hand = figure.joints.at(-1);
           return `${figure.name ?? `Figure ${figure.uid}`}: ${figure.joints.length} joints, root (${figure.root?.x}, ${figure.root?.y})`;
         })
         .join('; ');
@@ -283,10 +282,20 @@ export function registerPoseTools(server, { store }) {
     async input => {
       const current = project(store, input);
       const editor = current.editor;
-      const indices = input.frames ?? [keyframeIndex(editor, input)];
+      const positions = input.frames ?? [keyframeIndex(editor, input)];
+      for (const position of positions) {
+        if (position < 0 || position >= editor.timeline.length) {
+          throw new ToolError(
+            `There is no keyframe ${position}. The animation has ${editor.timeline.length} keyframes ` +
+              `(0 to ${editor.timeline.length - 1}).`,
+            { code: 'bad_frame' },
+          );
+        }
+      }
+      const range = rangeOptions(editor, positions);
       const outcome = editor.applyFigureRange({ kind: 'reset' }, {
         uids: [input.uid],
-        indices: nativeIndices(editor, indices),
+        ...range,
         label: 'Reset pose',
       });
       return result(`Reset the pose of figure ${input.uid} in ${outcome.changedFrames} keyframe(s).`, {

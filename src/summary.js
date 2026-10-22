@@ -73,17 +73,20 @@ function figureNames(report) {
 /**
  * The stored poses of a project.
  *
- * `exposed` says whether the playback reaches a pose. A project with an
- * advanced timeline can hold more poses than it shows.
+ * `position` says where the playback reaches a pose; it is null for a pose
+ * the playback never shows, which a project with an advanced timeline can
+ * hold. A position is the number the pose and figure tools take.
  */
 export function keyframeRows(editor) {
   const report = editor.report;
   const timeline = editor.timeline;
   return report.keyframes.map((frame, index) => {
-    const row = timeline.find(entry => entry.index === index);
+    const position = timeline.findIndex(entry => entry.index === index);
+    const row = position < 0 ? null : timeline[position];
     const duration = Math.max(0, frame.duration_raw ?? 1);
     return {
       keyframe: index,
+      position: position < 0 ? null : position,
       frameId: editor.getFrameId?.(index) ?? null,
       durationRaw: duration,
       inbetweens: report.version >= 5 ? Math.max(0, duration - 1) : 0,
@@ -93,20 +96,21 @@ export function keyframeRows(editor) {
       objects: frame.objects?.length ?? 0,
       backgroundId: frame.background_id ?? 0,
       camera: frame.camera?.is_default ? 'default' : 'moved',
-      exposed: Boolean(row),
     };
   });
 }
 
 /** The playback timeline: the places the playhead moves through. */
-export function playbackRows(editor) {
-  return editor.timeline.map((row, position) => ({
-    position,
-    keyframe: row.index,
-    startTick: row.start,
-    ticks: row.count,
-    seconds: round(row.count / (editor.report.fps || 1), 3),
-  }));
+export function playbackRows(editor, { from = 0, to = Infinity } = {}) {
+  return editor.timeline
+    .map((row, position) => ({
+      position,
+      keyframe: row.index,
+      startTick: row.start,
+      ticks: row.count,
+      seconds: round(row.count / (editor.report.fps || 1), 3),
+    }))
+    .filter(row => row.startTick >= from && row.startTick <= to);
 }
 
 /** The layer list, with the figures each one holds. */
