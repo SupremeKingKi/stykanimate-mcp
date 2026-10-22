@@ -7,7 +7,7 @@ rig, and changes the animation without a screen.
 ## Install
 
 ```sh
-npx -y stykanimate-mcp
+npx -y github:ghassenTn/stykanimate-mcp
 ```
 
 Local stdio transport. `stykanimate-mcp --transport http --port 7331` serves Streamable HTTP on

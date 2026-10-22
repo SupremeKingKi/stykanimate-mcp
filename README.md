@@ -29,14 +29,25 @@ to a Pivot `.piv` or `.stk` file.
 
 ## Install
 
+From GitHub, which needs no account:
+
 ```sh
-npm install -g stykanimate-mcp
+npx -y github:ghassenTn/stykanimate-mcp
 ```
 
-Or run it without installing:
+Or clone and run it:
 
 ```sh
-npx stykanimate-mcp
+git clone https://github.com/ghassenTn/stykanimate-mcp.git
+cd stykanimate-mcp
+npm ci
+node src/index.js
+```
+
+From npm, once the package is published:
+
+```sh
+npx -y stykanimate-mcp
 ```
 
 ### Connect a client
@@ -44,7 +55,7 @@ npx stykanimate-mcp
 Claude Code:
 
 ```sh
-claude mcp add stykanimate -- npx -y stykanimate-mcp
+claude mcp add stykanimate -- npx -y github:ghassenTn/stykanimate-mcp
 ```
 
 Claude Desktop, Cursor, or any client that reads `mcpServers`:
@@ -54,7 +65,7 @@ Claude Desktop, Cursor, or any client that reads `mcpServers`:
   "mcpServers": {
     "stykanimate": {
       "command": "npx",
-      "args": ["-y", "stykanimate-mcp"]
+      "args": ["-y", "github:ghassenTn/stykanimate-mcp"]
     }
   }
 }
@@ -68,7 +79,7 @@ VS Code (`.vscode/mcp.json`):
     "stykanimate": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "stykanimate-mcp"]
+      "args": ["-y", "github:ghassenTn/stykanimate-mcp"]
     }
   }
 }
