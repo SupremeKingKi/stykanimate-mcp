@@ -79,4 +79,13 @@ process.stdout.write(vendor.stdout ?? '');
 process.stderr.write(vendor.stderr ?? '');
 if (vendor.status !== 0) failures += 1;
 
+const manifest = spawnSync(process.execPath, ['scripts/check-server-json.mjs'], {
+  cwd: packageRoot,
+  encoding: 'utf8',
+  windowsHide: true,
+});
+process.stdout.write(manifest.stdout ?? '');
+process.stderr.write(manifest.stderr ?? '');
+if (manifest.status !== 0) failures += 1;
+
 process.exitCode = failures ? 1 : 0;

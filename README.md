@@ -138,6 +138,26 @@ Two conventions matter:
 - **A figure is named by its instance id**, and a joint by its handle id. Both come from
   `figure_list` and `figure_describe`.
 
+### Projects with an advanced timeline
+
+StykAnimate has two timelines. The simple one is a list of keyframes, each holding the pose of
+every figure, and it is what a project imported from Pivot uses. The advanced one is a sheet of
+cells that sample stored poses over spans, and it is what the app's own new projects use.
+
+The server speaks the simple model: a keyframe number is a stored pose, and the pose tools edit
+that pose. On an advanced project the sheet is the authority for what the animation shows, so
+some results differ from the app:
+
+- `figure_list` reports the figures the sheet shows at the playhead, and lists the stored
+  keyframes that hold each of them. A figure the sheet added appears in the first list and in
+  none of the second.
+- The pose tools edit the stored keyframe. The sheet may then show a different pose for it.
+- `project_describe` reports `advancedTimeline: true` when a project uses one.
+
+Everything else — opening, describing, transforming, recolouring, timing, saving — behaves the
+same in both.
+
+
 ## Resources
 
 | Resource | What it holds |
