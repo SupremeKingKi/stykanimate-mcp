@@ -194,9 +194,13 @@ npm run vendor -- --source ../StykAnimate-App
 
 ```sh
 npm ci
-npm run check     # syntax, tool registration, vendored-core freshness
+npm run check     # syntax, tool registration, vendored-core freshness, registry manifest
 npm test          # the test suite
 ```
+
+`node scripts/demo-session.mjs` drives the server over stdio the way a client does and prints
+every answer, which is the quickest way to see the whole flow: open, describe, pose, time,
+recolour, undo, save and reopen.
 
 The tests need a Python interpreter for the codec test; that one test skips itself when there is
 none.
