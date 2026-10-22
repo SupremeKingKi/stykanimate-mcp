@@ -166,9 +166,8 @@ export function registerPoseTools(server, { store }) {
       title: 'Move an IK target',
       description:
         'Move the inverse kinematics target of a joint, placing a hand or foot at a point on the canvas. ' +
-        'The controller must already be enabled on that joint; use pose_describe or figure_describe to see which ' +
-        'joints have controllers. A pinned controller keeps the target when the figure moves; an unpinned one ' +
-        'bakes the pose.',
+        'The controller must already be enabled on that joint; use figure_describe to see which joints have ' +
+        'controllers. A pinned controller keeps the target when the figure moves; an unpinned one bakes the pose.',
       inputSchema: z.object({
         project: projectField,
         uid: uidField,

@@ -116,8 +116,8 @@ export function registerFigureTools(server, { store }) {
       description:
         'Add a figure instance to the keyframe the playhead is on, using one of the existing figure definitions. ' +
         'The new figure is placed at the given position, or at the centre of the canvas. ' +
-        'Give the definition to use with "figureTypeId"; omit it to use the first definition in the project. ' +
-        'Use project_seek to choose the keyframe first.',
+        'Give a keyframe number to choose the keyframe; without one the playhead decides. ' +
+        'Give the definition to use with "figureTypeId"; omit it to use the first definition in the project.',
       inputSchema: z.object({
         project: projectField,
         figureTypeId: z.number().int().optional().describe('The figure definition to instantiate.'),
@@ -153,8 +153,9 @@ export function registerFigureTools(server, { store }) {
     {
       title: 'Duplicate a figure',
       description:
-        'Copy a figure, including its pose, into the same or another keyframe. The copy is nudged by an offset so ' +
-        'it does not sit exactly on the original. The copy gets a new id.',
+        'Copy a figure, including its pose, into a keyframe. Give a keyframe number to choose it; without one the ' +
+        'playhead decides. The copy is nudged by an offset so it does not sit exactly on the original. ' +
+        'The copy gets a new id.',
       inputSchema: z.object({
         project: projectField,
         uid: uidField,
