@@ -1,6 +1,7 @@
 /**
  * Project tools: open, inspect, validate and save a project.
  */
+import path from 'node:path';
 import { z } from 'zod/v4';
 import { projectSummary, keyframeRows, layerRows, figureRows, paginate, playbackRows, DEFAULT_LIMIT } from '../summary.js';
 import { writeDocument, writeFileAtomic } from '../documents.js';
@@ -20,8 +21,13 @@ const limitField = z
   .optional()
   .describe(`How many rows to return (1-500, default ${DEFAULT_LIMIT}).`);
 
-export function registerProjectTools(server, { store }) {
-  server.registerTool(
+/** Give a path the extension of the format it is written in. */
+function withExtension(target, format) {
+  const extension = path.extname(target);
+  return extension ? `${target.slice(0, -extension.length)}.${format}` : `${target}.${format}`;
+}
+
+export function registerProjectTools(server, { store }) {  server.registerTool(
     'project_open',
     {
       title: 'Open a project',
@@ -149,6 +155,8 @@ export function registerProjectTools(server, { store }) {
       description:
         'Write the open project to a file. Use "styk" for a StykAnimate project, "stkz" for a single figure, ' +
         '"stykmov" for a movieclip, and "piv" or "stk" for Pivot files (these need the Python codec). ' +
+        'A figure file holds one figure: name it with "figureTypeId" or "figureUid", or leave both out to take ' +
+        'the first figure in the project. ' +
         'The file is written in full before it replaces the destination, so a failure leaves the previous file intact. ' +
         'Give a path to choose where it goes, or leave it out to save beside the file it was opened from.',
       inputSchema: z.object({
@@ -180,7 +188,7 @@ export function registerProjectTools(server, { store }) {
         sourceId: current.sourceId,
         codec: store.codec,
       });
-      const destination = target.endsWith(`.${format}`) ? target : `${target}.${format}`;
+      const destination = withExtension(target, format);
       const saved = await writeFileAtomic(destination, written.bytes);
       current.editor.markSaved();
       return result(`Saved ${current.name} to ${saved.path} (${saved.bytes} bytes, ${format}).`, {

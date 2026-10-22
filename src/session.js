@@ -125,14 +125,6 @@ export class ProjectStore {
     this.#activeId = project.id;
     return project;
   }
-
-  /** Close every project. */
-  closeAll() {
-    const closed = this.list();
-    this.#projects.clear();
-    this.#activeId = null;
-    return closed;
-  }
 }
 
 function baseName(filePath) {

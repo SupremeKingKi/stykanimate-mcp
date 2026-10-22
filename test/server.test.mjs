@@ -242,3 +242,57 @@ test('a bad request comes back as a readable error', async t => {
   assert.equal(missing.isError, true);
   assert.match(missing.content[0].text, /No file at/);
 });
+
+test('a project saved as a figure file holds one figure', async t => {
+  const folder = await mkdtemp(path.join(tmpdir(), 'stykanimate-mcp-figure-'));
+  t.after(async () => rm(folder, { recursive: true, force: true }));
+  const file = await makeProjectFile(folder);
+
+  const { client } = await connect();
+  t.after(async () => client.close());
+  await call(client, 'project_open', { path: file });
+
+  const target = path.join(folder, 'blue');
+  const saved = await call(client, 'project_save', { path: target, format: 'stkz' });
+  assert.equal(saved.isError, undefined, saved.content?.[0]?.text);
+  assert.equal(saved.structuredContent.path, path.join(folder, 'blue.stkz'));
+
+  const bytes = await readFile(saved.structuredContent.path);
+  assert.equal(bytes.subarray(0, 4).toString('ascii'), 'STKZ');
+
+  const reopened = await call(client, 'project_open', { path: saved.structuredContent.path });
+  assert.equal(reopened.isError, undefined, reopened.content?.[0]?.text);
+  assert.equal(reopened.structuredContent.project.format, 'stkz');
+  assert.equal(reopened.structuredContent.project.figures.instances, 1);
+});
+
+test('a project saved with the wrong extension gets the right one', async t => {
+  const folder = await mkdtemp(path.join(tmpdir(), 'stykanimate-mcp-ext-'));
+  t.after(async () => rm(folder, { recursive: true, force: true }));
+  const file = await makeProjectFile(folder);
+
+  const { client } = await connect();
+  t.after(async () => client.close());
+  await call(client, 'project_open', { path: file });
+
+  const saved = await call(client, 'project_save', { path: path.join(folder, 'copy.piv'), format: 'styk' });
+  assert.equal(saved.isError, undefined, saved.content?.[0]?.text);
+  assert.equal(saved.structuredContent.path, path.join(folder, 'copy.styk'));
+});
+
+test('a project stored as plain JSON can be opened', async t => {
+  const folder = await mkdtemp(path.join(tmpdir(), 'stykanimate-mcp-json-'));
+  t.after(async () => rm(folder, { recursive: true, force: true }));
+
+  const { Editor, createStartupDocument } = await import('../src/core.js');
+  const editor = new Editor({ demo: false });
+  editor.load(createStartupDocument());
+  const file = path.join(folder, 'blue.json');
+  await writeFile(file, JSON.stringify(editor.serialize()));
+
+  const { client } = await connect();
+  t.after(async () => client.close());
+  const opened = await call(client, 'project_open', { path: file });
+  assert.equal(opened.isError, undefined, opened.content?.[0]?.text);
+  assert.equal(opened.structuredContent.project.figures.instances, 1);
+});

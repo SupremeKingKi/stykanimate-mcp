@@ -8,9 +8,16 @@
  */
 import { ToolError } from '../errors.js';
 
-/** The project a call works on: the named one, or the active one. */
+/**
+ * The project a call works on: the named one, or the active one.
+ *
+ * Using a project makes it the active one, so a short conversation never has
+ * to repeat an identifier.
+ */
 export function project(store, input) {
-  return store.require(input?.project);
+  const found = store.require(input?.project);
+  store.activate(found.id);
+  return found;
 }
 
 /**
@@ -133,32 +140,12 @@ export function rgbBytes(color) {
   throw new ToolError('Give a colour as "#rrggbb" or as three RGB bytes.', { code: 'bad_color' });
 }
 
-/** The editor's transparency byte for an opacity between 0 and 1. */
-export function transparencyByte(opacity) {
-  if (typeof opacity !== 'number' || !Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
-    throw new ToolError('Opacity must be a number between 0 and 1.', { code: 'bad_opacity' });
-  }
-  return Math.round((1 - opacity) * 255);
-}
-
 /** Build a tool result from data and a short human summary. */
 export function result(summary, data) {
   return {
     content: [{ type: 'text', text: summary }],
     structuredContent: data,
   };
-}
-
-/** A one-line summary of the project's current state. */
-export function projectLine(store, current) {
-  const parts = [
-    `${current.name}`,
-    `${current.editor.report.keyframes.length} keyframes`,
-    `${current.editor.report.fps} fps`,
-    `${current.editor.report.canvas_width}×${current.editor.report.canvas_height}`,
-  ];
-  if (current.editor.dirty) parts.push('unsaved changes');
-  return parts.join(' · ');
 }
 
 export { ToolError };

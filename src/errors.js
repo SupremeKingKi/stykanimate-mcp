@@ -6,9 +6,6 @@
  * with the key and the offending parameters attached for disambiguation.
  */
 
-/** Errors the caller can fix by changing their request. */
-const USER_ACTION = 'user-action';
-
 export class ToolError extends Error {
   constructor(message, { code = 'tool_error', details = null } = {}) {
     super(message);
@@ -16,11 +13,6 @@ export class ToolError extends Error {
     this.code = code;
     this.details = details;
   }
-}
-
-/** A request that asks for something the open project cannot provide. */
-export function userError(message, details = null) {
-  return new ToolError(message, { code: USER_ACTION, details });
 }
 
 /** Describe any thrown value for a model: message, key and useful context. */
