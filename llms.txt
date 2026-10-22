@@ -28,8 +28,10 @@ codec on demand.
 
 ## Conventions
 
-- A **keyframe number** is a position in the project's stored keyframe list. It is what the
-  figure, pose and timing tools use.
+- A **frame number** is a place on the timeline, one of the positions the playhead moves through.
+  The pose and figure tools use it, because they act on what the animation shows.
+- A **keyframe number** in `keyframe_edit` and `keyframe_timing` is a stored pose, one entry in
+  the project's pose list. On a project with one keyframe per moment the two are the same number.
 - A **figure** is named by its instance id; a **joint** by its handle id. Both come from
   `figure_list` and `figure_describe`.
 - Angles are absolute and measured from the parent joint. `pose_set` takes degrees or radians;

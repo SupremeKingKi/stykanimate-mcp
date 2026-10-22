@@ -148,12 +148,14 @@ test('a figure can be restyled after the project gained a keyframe', async t => 
   // fewer ticks than the project has keyframes.
   const added = await call(client, 'keyframe_edit', { action: 'add', frame: 0 });
   assert.equal(added.isError, undefined, added.content?.[0]?.text);
+  assert.equal(added.structuredContent.keyframes, 2);
 
   const listed = await call(client, 'figure_list');
   const uid = listed.structuredContent.figures.items[0].uid;
   const recoloured = await call(client, 'style_set', { target: 'figure', uid, color: '#00ff00' });
   assert.equal(recoloured.isError, undefined, recoloured.content?.[0]?.text);
-  assert.equal(recoloured.structuredContent.frames.length, 2);
+  // The change names the ticks the playback reaches, not the stored poses.
+  assert.ok(recoloured.structuredContent.ticks.length >= 1);
 });
 
 test('the evaluated rig names the keyframe it was read at', async t => {

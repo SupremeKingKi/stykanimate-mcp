@@ -8,13 +8,13 @@
 import { z } from 'zod/v4';
 import { figureDefinition, figureRows, paginate, DEFAULT_LIMIT } from '../summary.js';
 import { ToolError } from '../errors.js';
-import { degrees, goToKeyframe, keyframeIndex, project, result, selectObject } from './shared.js';
+import { degrees, goToKeyframe, keyframeIndex, nativeIndices, project, result, selectObject } from './shared.js';
 
 const projectField = z
   .string()
   .optional()
   .describe('The id of an open project, from project_open. Defaults to the project used most recently.');
-const frameField = z.number().int().optional().describe('The keyframe to work on. Defaults to the playhead.');
+const frameField = z.number().int().optional().describe('The place on the timeline to work on. Defaults to the playhead.');
 const uidField = z.number().int().describe('The id of the figure instance.');
 
 export function registerFigureTools(server, { store }) {
@@ -171,7 +171,7 @@ export function registerFigureTools(server, { store }) {
       goToKeyframe(editor, source);
       selectObject(editor, input.uid);
       const options = { offset: input.offset ?? 24 };
-      const outcome = editor.duplicateFiguresInFrames([source], options);
+      const outcome = editor.duplicateFiguresInFrames(nativeIndices(editor, [source]), options);
       const copy = outcome.insertedUids?.[0] ?? editor.selectedUid;
       return result(`Duplicated figure ${input.uid} into keyframe ${source} as uid ${copy}.`, {
         uid: copy,
@@ -206,7 +206,7 @@ export function registerFigureTools(server, { store }) {
           throw new ToolError(`There is no keyframe ${index}.`, { code: 'bad_frame' });
         }
       }
-      const outcome = editor.deleteFiguresInFrames(indices);
+      const outcome = editor.deleteFiguresInFrames(nativeIndices(editor, indices));
       return result(`Removed figure ${input.uid} from ${outcome.changedFrames} keyframe(s).`, {
         uid: input.uid,
         changedFrames: outcome.changedFrames,
@@ -266,21 +266,21 @@ export function registerFigureTools(server, { store }) {
         case 'move': {
           const dx = input.dx ?? 0;
           const dy = input.dy ?? 0;
-          editor.moveSelectionInFrames(dx, dy, indices);
+          editor.moveSelectionInFrames(dx, dy, nativeIndices(editor, indices));
           break;
         }
         case 'rotate': {
           if (input.degrees === undefined) throw new ToolError('Give the angle in degrees.', { code: 'missing_value' });
-          editor.rotateFiguresInFrames(degrees(input.degrees), indices);
+          editor.rotateFiguresInFrames(degrees(input.degrees), nativeIndices(editor, indices));
           break;
         }
         case 'scale': {
           if (input.factor === undefined) throw new ToolError('Give the size factor.', { code: 'missing_value' });
-          editor.scaleFiguresInFrames(input.factor, indices, { relative: true });
+          editor.scaleFiguresInFrames(input.factor, nativeIndices(editor, indices), { relative: true });
           break;
         }
         case 'mirror': {
-          editor.mirrorFiguresInFrames(input.axis ?? 'horizontal', indices);
+          editor.mirrorFiguresInFrames(input.axis ?? 'horizontal', nativeIndices(editor, indices));
           break;
         }
         case 'align': {
@@ -289,18 +289,18 @@ export function registerFigureTools(server, { store }) {
               code: 'missing_value',
             });
           }
-          editor.alignFiguresInFrames(input.axis, input.edge, indices);
+          editor.alignFiguresInFrames(input.axis, input.edge, nativeIndices(editor, indices));
           break;
         }
         case 'center': {
-          editor.centerFiguresInFrames(indices);
+          editor.centerFiguresInFrames(nativeIndices(editor, indices));
           break;
         }
         case 'order': {
           if (!input.direction) throw new ToolError('Give a draw order direction.', { code: 'missing_value' });
           const direction =
             input.direction === 'front' ? 'front' : input.direction === 'back' ? 'back' : input.direction === 'up' ? 1 : -1;
-          editor.orderFiguresInFrames(direction, indices);
+          editor.orderFiguresInFrames(direction, nativeIndices(editor, indices));
           break;
         }
         default:

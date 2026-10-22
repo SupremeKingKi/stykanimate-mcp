@@ -5,13 +5,13 @@
 import { z } from 'zod/v4';
 import { layerRows } from '../summary.js';
 import { ToolError } from '../errors.js';
-import { goToKeyframe, keyframeIndex, project, result, rgbBytes, selectObject } from './shared.js';
+import { goToKeyframe, keyframeIndex, nativeIndices, project, result, rgbBytes, selectObject } from './shared.js';
 
 const projectField = z
   .string()
   .optional()
   .describe('The id of an open project, from project_open. Defaults to the project used most recently.');
-const frameField = z.number().int().optional().describe('The keyframe to work on. Defaults to the playhead.');
+const frameField = z.number().int().optional().describe('The place on the timeline to work on. Defaults to the playhead.');
 
 export function registerLayerTools(server, { store }) {
   server.registerTool(
@@ -162,20 +162,16 @@ export function registerLayerTools(server, { store }) {
           if (input.color === undefined && input.opacity === undefined) {
             throw new ToolError('Give a colour, an opacity, or both.', { code: 'missing_value' });
           }
-          const frames = input.frames ?? framesHolding(editor, input.uid);
-          if (!frames.length) {
-            throw new ToolError(`Figure ${input.uid} is not in any keyframe.`, { code: 'unknown_figure' });
-          }
-          goToKeyframe(editor, frames[0]);
           const operation = { kind: 'recolor', mode: 'all' };
           if (input.color !== undefined) operation.color = rgbBytes(input.color);
           if (input.opacity !== undefined) operation.opacity = input.opacity;
+
           if (editor.report._styk?.layerSheet) {
-            // An advanced timeline exposes its poses as cells, so the change
-            // has to name the ticks it reaches rather than the stored poses.
-            const ticks = frames
-              .map(index => editor.timeline.find(row => row.index === index)?.start)
-              .filter(tick => tick !== undefined);
+            // An advanced timeline exposes its poses as cells, so the change has
+            // to name the ticks the playback reaches rather than stored poses.
+            const ticks = input.frames
+              ? input.frames.map(position => editor.timeline[position]?.start).filter(tick => tick !== undefined)
+              : ticksHolding(editor, input.uid);
             if (!ticks.length) {
               throw new ToolError(
                 `Figure ${input.uid} is not exposed by the playback timeline, so it cannot be restyled.`,
@@ -183,9 +179,22 @@ export function registerLayerTools(server, { store }) {
               );
             }
             editor.applyFigureRange(operation, { ticks, uids: [input.uid], label: 'Edit figure colors' });
-          } else {
-            editor.applyFigureRange(operation, { indices: frames, uids: [input.uid], label: 'Edit figure colors' });
+            return result(
+              `Restyled figure ${input.uid} in ${ticks.length} place(s) on the timeline.`,
+              { uid: input.uid, ticks, project: current.id },
+            );
           }
+
+          const frames = input.frames ?? framesHolding(editor, input.uid);
+          if (!frames.length) {
+            throw new ToolError(`Figure ${input.uid} is not in any keyframe.`, { code: 'unknown_figure' });
+          }
+          goToKeyframe(editor, frames[0]);
+          editor.applyFigureRange(operation, {
+            indices: nativeIndices(editor, frames),
+            uids: [input.uid],
+            label: 'Edit figure colors',
+          });
           return result(
             `Restyled figure ${input.uid} in ${frames.length} keyframe(s).`,
             { uid: input.uid, frames, project: current.id },
@@ -244,11 +253,28 @@ export function registerLayerTools(server, { store }) {
   );
 }
 
-/** The keyframes a figure instance appears in. */
+/** The playback positions a figure instance appears in. */
 function framesHolding(editor, uid) {
   const frames = [];
   editor.report.keyframes.forEach((frame, index) => {
     if (frame.objects.some(object => object.unique_id === uid)) frames.push(index);
   });
   return frames;
+}
+
+/** The playback ticks a figure instance is shown at. */
+function ticksHolding(editor, uid, limit = 400) {
+  const rows = editor.timeline;
+  const ticks = [];
+  const count = Math.min(rows.length, limit);
+  const playhead = editor.tick;
+  try {
+    for (let position = 0; position < count; position += 1) {
+      const frame = editor.seek(rows[position].start);
+      if (frame.objects.some(object => object.unique_id === uid)) ticks.push(rows[position].start);
+    }
+  } finally {
+    editor.seek(playhead);
+  }
+  return ticks;
 }

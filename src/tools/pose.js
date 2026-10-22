@@ -9,13 +9,13 @@
 import { z } from 'zod/v4';
 import { poseReport } from '../summary.js';
 import { ToolError } from '../errors.js';
-import { degrees, goToKeyframe, keyframeIndex, project, result, selectJoint, selectObject } from './shared.js';
+import { degrees, goToKeyframe, keyframeIndex, nativeIndices, project, result, selectJoint, selectObject } from './shared.js';
 
 const projectField = z
   .string()
   .optional()
   .describe('The id of an open project, from project_open. Defaults to the project used most recently.');
-const frameField = z.number().int().optional().describe('The keyframe to work on. Defaults to the playhead.');
+const frameField = z.number().int().optional().describe('The place on the timeline to work on. Defaults to the playhead.');
 const uidField = z.number().int().describe('The id of the figure instance.');
 
 export function registerPoseTools(server, { store }) {
@@ -286,7 +286,7 @@ export function registerPoseTools(server, { store }) {
       const indices = input.frames ?? [keyframeIndex(editor, input)];
       const outcome = editor.applyFigureRange({ kind: 'reset' }, {
         uids: [input.uid],
-        indices,
+        indices: nativeIndices(editor, indices),
         label: 'Reset pose',
       });
       return result(`Reset the pose of figure ${input.uid} in ${outcome.changedFrames} keyframe(s).`, {

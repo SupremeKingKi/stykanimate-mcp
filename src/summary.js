@@ -71,14 +71,12 @@ function figureNames(report) {
 }
 
 /**
- * The stored keyframes of a project.
+ * The stored poses of a project.
  *
- * A keyframe number always means a position in this list, because that is
- * what the figure, pose and timing tools address. A project with an advanced
- * timeline can also expose a shorter playback timeline; `exposed` says which
- * keyframes the playback reaches.
+ * `exposed` says whether the playback reaches a pose. A project with an
+ * advanced timeline can hold more poses than it shows.
  */
-export function keyframeRows(editor, { from = 0, to = Infinity } = {}) {
+export function keyframeRows(editor) {
   const report = editor.report;
   const timeline = editor.timeline;
   return report.keyframes.map((frame, index) => {
@@ -97,10 +95,10 @@ export function keyframeRows(editor, { from = 0, to = Infinity } = {}) {
       camera: frame.camera?.is_default ? 'default' : 'moved',
       exposed: Boolean(row),
     };
-  }).filter(row => (row.startTick ?? row.keyframe) >= from && (row.startTick ?? row.keyframe) <= to);
+  });
 }
 
-/** The playback timeline: the ticks the playhead moves through. */
+/** The playback timeline: the places the playhead moves through. */
 export function playbackRows(editor) {
   return editor.timeline.map((row, position) => ({
     position,
@@ -235,8 +233,8 @@ export function figureDefinition(report, figureTypeId) {
 export function poseReport(editor, { keyframe, tick, uids = null }) {
   const report = editor.report;
   const rows = editor.timeline;
-  const index = Math.max(0, Math.min(rows.length - 1, keyframe));
-  const row = rows.find(entry => entry.index === keyframe) ?? rows[index];
+  const position = Math.max(0, Math.min(rows.length - 1, keyframe));
+  const row = rows[position];
   const absoluteTick = tick ?? row?.start ?? 0;
   const frame = editor.seek(absoluteTick);
   const geometry = editor.geometry;
@@ -295,7 +293,7 @@ export function poseReport(editor, { keyframe, tick, uids = null }) {
   }
 
   return {
-    keyframe,
+    keyframe: position,
     tick: absoluteTick,
     seconds: round(absoluteTick / (report.fps || 1), 3),
     figureCount: figures.length,

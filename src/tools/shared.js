@@ -21,23 +21,46 @@ export function project(store, input) {
 }
 
 /**
- * The native keyframe index a request names.
+ * The stored pose a request names.
  *
- * A keyframe number always means a position in the project's stored keyframe
- * list, which is what the figure, pose and timing tools address. The playback
- * timeline is a separate thing: an advanced project may expose fewer or more
- * ticks than it has keyframes.
+ * A stored pose is one entry in the project's pose list. It is what the
+ * keyframe tools address, because they add, remove and retime poses.
  */
-export function keyframeIndex(editor, input, { fallback = null } = {}) {
+export function storedIndex(editor, input, { fallback = null } = {}) {
   if (input?.frame !== undefined && input?.frame !== null) {
     const index = Math.trunc(input.frame);
     if (!Number.isFinite(index) || index < 0 || index >= editor.report.keyframes.length) {
       throw new ToolError(
-        `There is no keyframe ${index}. The project has ${editor.report.keyframes.length} keyframes (0 to ${editor.report.keyframes.length - 1}).`,
+        `There is no keyframe ${index}. The project has ${editor.report.keyframes.length} keyframes ` +
+          `(0 to ${editor.report.keyframes.length - 1}).`,
         { code: 'bad_frame' },
       );
     }
     return index;
+  }
+  if (fallback !== null) return fallback;
+  return editor.frameIndex;
+}
+
+/**
+ * The playback position a request names.
+ *
+ * A position is a place on the timeline the playhead moves through, and it is
+ * what the pose and figure tools address, because they act on what the
+ * animation shows. On a project with one keyframe per moment a position is
+ * also the number of the stored pose it shows.
+ */
+export function keyframeIndex(editor, input, { fallback = null } = {}) {
+  if (input?.frame !== undefined && input?.frame !== null) {
+    const position = Math.trunc(input.frame);
+    if (!Number.isFinite(position) || position < 0 || position >= editor.timeline.length) {
+      throw new ToolError(
+        `There is no keyframe ${position}. The animation has ${editor.timeline.length} keyframes ` +
+          `(0 to ${editor.timeline.length - 1}).`,
+        { code: 'bad_frame' },
+      );
+    }
+    return position;
   }
   if (input?.tick !== undefined && input?.tick !== null) {
     const tick = Math.trunc(input.tick);
@@ -47,32 +70,37 @@ export function keyframeIndex(editor, input, { fallback = null } = {}) {
       });
     }
     const row = editor.timeline.find(entry => entry.start <= tick);
-    return row ? row.index : 0;
+    return row ? editor.timeline.indexOf(row) : 0;
   }
   if (fallback !== null) return fallback;
   return editor.frameIndex;
 }
 
-/** The playback tick a keyframe starts at. */
-export function keyframeTick(editor, index) {
-  const row = editor.timeline.find(entry => entry.index === index);
-  if (row) return row.start;
-  const fallback = editor.timeline[Math.min(index, editor.timeline.length - 1)];
-  return fallback?.start ?? 0;
+/** The stored pose a playback position shows. */
+export function nativeIndex(editor, position) {
+  return editor.timeline[position]?.index ?? position;
 }
 
-/** Move the playhead onto a keyframe. */
-export function goToKeyframe(editor, index) {
-  editor.seek(keyframeTick(editor, index));
-  // A project with an advanced timeline can expose fewer playback rows than it
-  // has keyframes. Point the editor at the named keyframe so an edit lands on
-  // it rather than on whichever row the tick happened to fall in.
-  if (editor.frameIndex !== index && index < editor.report.keyframes.length) {
-    editor.frameIndex = index;
-    editor.tick = keyframeTick(editor, index);
-    editor._invalidate?.({ viewOnly: true });
-  }
-  return index;
+/** The stored poses a set of playback positions shows. */
+export function nativeIndices(editor, positions) {
+  return positions.map(position => nativeIndex(editor, position));
+}
+
+/** The playback position that shows a stored pose. */
+export function positionOf(editor, stored) {
+  const position = editor.timeline.findIndex(entry => entry.index === stored);
+  return position < 0 ? null : position;
+}
+
+/** The playback tick a position starts at. */
+export function keyframeTick(editor, position) {
+  return editor.timeline[position]?.start ?? 0;
+}
+
+/** Move the playhead onto a position. */
+export function goToKeyframe(editor, position) {
+  editor.seek(keyframeTick(editor, position));
+  return position;
 }
 
 /**
