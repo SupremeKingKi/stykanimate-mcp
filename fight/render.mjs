@@ -120,6 +120,8 @@ export async function render(scene, options) {
   let smoothZoom = null;
   let smoothY = null;
   const eyes = new Map(scene.order.map(id => [id, []]));
+  // Every blow jolts whoever takes it, on top of whatever their keys say.
+  const recoils = new Map(scene.order.map(id => [id, []]));
 
   const wantSheet = options.sheet ? [...options.sheet] : null;
   const sheetFrames = [];
@@ -141,6 +143,7 @@ export async function render(scene, options) {
         state.pose.fs += beat * state.breathe * 4;
         state.pose.bs += beat * state.breathe * 3;
       }
+      applyRecoil(state, recoils.get(id), sceneTime);
       const before = actor.place;
       state.y = GROUND - lowestPoint(solve(state.pose, actor.look.scale)) - state.air;
       state.vx = before && step > 0 ? (state.x - before.x) / dt : 0;
@@ -149,7 +152,7 @@ export async function render(scene, options) {
 
     // Events whose moment has come.
     while (nextEvent < events.length && events[nextEvent].t <= sceneTime + 1e-9) {
-      fire(events[nextEvent], { actors, effects, shakes, speech, sounds, videoTime, sceneTime, post, onFreeze: d => (freeze = Math.max(freeze, d)) });
+      fire(events[nextEvent], { actors, effects, shakes, speech, sounds, videoTime, sceneTime, post, recoils, onFreeze: d => (freeze = Math.max(freeze, d)) });
       nextEvent += 1;
     }
 
@@ -282,12 +285,65 @@ function attacker(actors, event, p) {
   return best;
 }
 
-function fire(event, { actors, effects, shakes, speech, sounds, videoTime, post, onFreeze }) {
+/** Who takes a blow: the figure named at the hit, or, for a hit at a fist or blade, whoever is nearest it. */
+function victim(actors, event, p, by) {
+  if (!event.at) return null;
+  const named = actors.get(event.at.split('.')[0]);
+  if (named !== by) return named;
+  let best = null;
+  let bestDistance = Infinity;
+  for (const actor of actors.values()) {
+    if (actor === by) continue;
+    const chest = actor.point('chest');
+    const distance = Math.hypot(chest.x - p.x, chest.y - p.y);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = actor;
+    }
+  }
+  return best;
+}
+
+/**
+ * Jolt a figure that was just hit: the trunk snaps away from the blow, the
+ * head whips a moment later, the arms fly up and the body is shoved a
+ * little, then it all springs back. It shows at once, even through a hit-stop.
+ */
+function applyRecoil(state, list, now) {
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const { start, strength, dir } = list[i];
+    const age = now - start;
+    if (age > 0.7) {
+      list.splice(i, 1);
+      continue;
+    }
+    const pulse = a => (a < 0 ? 0 : a < 0.04 ? 0.6 + 10 * a : Math.exp(-(a - 0.04) / 0.13));
+    const body = pulse(age) * strength;
+    const head = pulse(age - 0.04) * strength;
+    // Positive leans the way the figure faces; a blow from the front leans it back.
+    const away = dir * state.facing;
+    state.pose.lean += 14 * body * away;
+    state.pose.head += 22 * head * away;
+    state.pose.fs += 12 * body;
+    state.pose.bs += 16 * body;
+    state.pose.fe -= 10 * head;
+    state.x += dir * 9 * body;
+  }
+}
+
+function fire(event, { actors, effects, shakes, speech, sounds, videoTime, sceneTime, post, recoils, onFreeze }) {
   const sound = (name, gain = 1) => sounds.push({ time: videoTime, name, gain });
   switch (event.type) {
     case 'impact': {
       const p = at(actors, event);
-      effects.impact(p.x, p.y, { kind: event.kind, size: event.size ?? 1, angle: event.angle ?? 0, tint: attacker(actors, event, p)?.look.signature });
+      const by = attacker(actors, event, p);
+      effects.impact(p.x, p.y, { kind: event.kind, size: event.size ?? 1, angle: event.angle ?? 0, tint: by?.look.signature });
+      const target = victim(actors, event, p, by);
+      if (target && by) {
+        const size = event.size ?? 1;
+        const strength = ['block', 'clang'].includes(event.kind) ? 0.65 : size < 1.3 ? 0.6 + 0.25 * size : Math.min(1.6, 1.1 + 0.2 * (size - 1.3));
+        recoils.get(target.id).push({ start: sceneTime, strength, dir: Math.sign(target.place.x - by.place.x) || -target.place.facing });
+      }
       sound(event.sound ?? { hit: 'punch', heavy: 'heavy', block: 'block', clang: 'clang', slash: 'slash', dark: 'heavy', purple: 'energyHit' }[event.kind ?? 'hit'], event.gain ?? 1);
       break;
     }
