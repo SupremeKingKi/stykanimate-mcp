@@ -17,7 +17,7 @@ import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { Actor } from './characters.mjs';
 import { Effects, drawSpeech } from './effects.mjs';
 import { lowestPoint, mix, solve } from './rig.mjs';
-import { drawForeground, drawStage, GROUND } from './stage.mjs';
+import { drawForeground, drawPlanePillar, drawStage, GROUND } from './stage.mjs';
 import { EASE } from './timeline.mjs';
 import { mixAudio } from './audio.mjs';
 import { FootLock } from './feet.mjs';
@@ -108,6 +108,8 @@ export async function render(scene, options) {
   // Post effects on the finished frame: zoom punches, camera tilt, colour split and impact frames.
   const post = { punches: [], tilts: [], splits: [], impactFrames: 0, impactIndex: 0 };
   const output = createCanvas(width, height);
+  // The stage a scene lays out: zones along the floor, and pillars in the fighters' plane that can break.
+  const stage = { layout: scene.stage?.layout ?? null, pillars: (scene.stage?.pillars ?? []).map(x => ({ x, brokenAt: null })) };
   const sounds = [];
   let nextEvent = 0;
 
@@ -157,7 +159,7 @@ export async function render(scene, options) {
 
     // Events whose moment has come.
     while (nextEvent < events.length && events[nextEvent].t <= sceneTime + 1e-6) {
-      fire(events[nextEvent], { actors, effects, shakes, speech, sounds, videoTime, sceneTime, post, recoils, onFreeze: d => (freeze = Math.max(freeze, d)) });
+      fire(events[nextEvent], { actors, effects, shakes, speech, sounds, videoTime, sceneTime, post, recoils, stage, onFreeze: d => (freeze = Math.max(freeze, d)) });
       nextEvent += 1;
     }
 
@@ -222,7 +224,7 @@ export async function render(scene, options) {
 
     const sheetHit = wantSheet && wantSheet.length && sceneTime + 1e-9 >= wantSheet[0];
     if (!wantSheet || sheetHit) {
-      paint(ctx, { scene, cam, view, actors, effects, history, speech, sceneTime, videoTime });
+      paint(ctx, { scene, cam, view, actors, effects, history, speech, sceneTime, videoTime, stage });
       const shakeTilt = (Math.abs(shakeX) + Math.abs(shakeY)) * 0.06 * Math.sign(shakeX || 1);
       const finished = finish(canvas, output, post, videoTime, decaying(post.tilts, videoTime) + shakeTilt);
       if (encoder) await encoder.write(finished.data());
@@ -336,7 +338,7 @@ function applyRecoil(state, list, now) {
   }
 }
 
-function fire(event, { actors, effects, shakes, speech, sounds, videoTime, sceneTime, post, recoils, onFreeze }) {
+function fire(event, { actors, effects, shakes, speech, sounds, videoTime, sceneTime, post, recoils, stage, onFreeze }) {
   const sound = (name, gain = 1) => sounds.push({ time: videoTime, name, gain });
   switch (event.type) {
     case 'impact': {
@@ -413,6 +415,12 @@ function fire(event, { actors, effects, shakes, speech, sounds, videoTime, scene
       effects.sprite(event.name, p.x, p.y, { ...event, flip: (event.flip ?? 1) * (event.faceActor ? facing : 1) });
       break;
     }
+    case 'breakPillar': {
+      // The standing pillar nearest the blow shatters.
+      const pillar = stage.pillars.filter(p => p.brokenAt === null).sort((a, b) => Math.abs(a.x - event.x) - Math.abs(b.x - event.x))[0];
+      if (pillar) pillar.brokenAt = videoTime;
+      break;
+    }
     case 'crack': {
       const p = at(actors, event);
       effects.crack(p.x, event);
@@ -436,11 +444,11 @@ function fire(event, { actors, effects, shakes, speech, sounds, videoTime, scene
   }
 }
 
-function paint(ctx, { scene, cam, view, actors, effects, history, speech, sceneTime, videoTime }) {
+function paint(ctx, { scene, cam, view, actors, effects, history, speech, sceneTime, videoTime, stage }) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
-  drawStage(ctx, cam, view, { dim: cam.dim, time: videoTime });
+  drawStage(ctx, cam, view, { dim: cam.dim, time: videoTime, layout: stage.layout });
 
   const world = () => ctx.setTransform(cam.zoom, 0, 0, cam.zoom, view.width / 2 - cam.x * cam.zoom + cam.shakeX, view.height / 2 - cam.y * cam.zoom + cam.shakeY);
   world();
@@ -456,6 +464,7 @@ function paint(ctx, { scene, cam, view, actors, effects, history, speech, sceneT
     ctx.fill();
   }
 
+  for (const pillar of stage.pillars) drawPlanePillar(ctx, pillar.x, pillar.brokenAt === null ? null : videoTime - pillar.brokenAt);
   effects.drawDecals(ctx);
 
   for (const id of scene.order) {
@@ -764,9 +773,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 function reportBeats(sounds, bpm, offset = 0) {
   const sixteenth = 60 / bpm / 4;
   const blows = ['punch', 'heavy', 'block', 'clang', 'slash', 'energyHit'];
-  const offsets = sounds
-    .filter(sound => sound.blow && blows.includes(sound.name))
-    .map(sound => Math.abs(sound.time - offset - Math.round((sound.time - offset) / sixteenth) * sixteenth) * 1000);
+  const hits = sounds.filter(sound => sound.blow && blows.includes(sound.name));
+  const offsets = hits.map(sound => Math.abs(sound.time - offset - Math.round((sound.time - offset) / sixteenth) * sixteenth) * 1000);
+  hits.forEach((sound, i) => offsets[i] >= 1 && console.log(`  off the beat: ${sound.name} at ${sound.time.toFixed(3)}s, ${offsets[i].toFixed(1)}ms`));
   if (!offsets.length) return;
   const worst = Math.max(...offsets);
   const mean = offsets.reduce((a, b) => a + b, 0) / offsets.length;
