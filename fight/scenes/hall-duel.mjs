@@ -20,6 +20,7 @@
  *  28.7  the end
  */
 import { Track, P, run, strike, react, launch, jump, dash } from '../timeline.mjs';
+import { connect } from '../contacts.mjs';
 
 export function build() {
   const K = new Track('kade', { pose: 'stand', x: 150, facing: 1 });
@@ -101,7 +102,7 @@ export function build() {
   swing(chopLands - 0.08, 0.7);
   V.key(8.3, 'crouch', { ease: 'out', breathe: 0 });
   V.key(8.48, 'hunch', { dx: 160, arc: 40, ease: 'out' });
-  ev('impact', chopLands, { at: 'sora.tip', kind: 'clang', size: 0.8, angle: -Math.PI / 2 });
+  ev('impact', chopLands, { at: 'sora.tip', kind: 'clang', size: 0.8, angle: -Math.PI / 2, contact: false });
   ev('dust', chopLands, { at: 'sora.tip', size: 0.8 });
   ev('shake', chopLands, { amount: 5, dur: 0.2 });
   S.key(8.75, 'scytheReady');
@@ -157,7 +158,7 @@ export function build() {
   K.key(13.32, 'slashWind', { ease: 'out' });
   K.key(13.43, 'slash', { ease: 'snap', dx: 20 });
   V.key(13.35, 'catch', { ease: 'snap', breathe: 0 });
-  ev('impact', 13.43, { at: 'vorthak.fist', kind: 'clang', size: 1.2 });
+  ev('impact', 13.43, { at: 'vorthak.fist', kind: 'clang', size: 1.2, contact: false });
   ev('hitstop', 13.43, { dur: 0.08 });
   S.key(13.15, 'crouch', { ease: 'out' });
   S.key(13.45, 'scytheRaise', { x: 1520, air: 150, ease: 'out', moveEase: 'out' });
@@ -224,7 +225,9 @@ export function build() {
   V.key(18.25, 'dash', { ease: 'out', x: 1370 });
   V.key(18.3, 'upperWind', { ease: 'out' });
   const upper = 18.4;
-  V.key(upper, 'upper', { ease: 'snap' });
+  // The fist meets Kade's chin on the way up; the follow-through carries it overhead.
+  V.key(upper, P('upper', { lean: 25, fs: 55, fe: 60 }), { ease: 'snap' });
+  V.key(upper + 0.1, 'upper', { ease: 'out' });
   ev('impact', upper, { at: 'vorthak.fist', kind: 'dark', size: 1.8 });
   ev('hitstop', upper, { dur: 0.12 });
   ev('shake', upper, { amount: 14, dur: 0.35 });
@@ -268,7 +271,7 @@ export function build() {
   S.key(cast, 'scytheSweep', { ease: 'snap', weaponGlow: 0.3 });
   ev('wave', cast, { from: 'sora.chest', to: 'vorthak.chest', life: 0.28, size: 1.1 });
   const waveHits = cast + 0.28;
-  ev('impact', waveHits, { at: 'vorthak.chest', kind: 'purple', size: 1.8 });
+  ev('impact', waveHits, { at: 'vorthak.chest', kind: 'purple', size: 1.8, contact: false });
   ev('hitstop', waveHits, { dur: 0.1 });
   ev('shake', waveHits, { amount: 12, dur: 0.3 });
   ev('punch', waveHits, { amount: 0.1 });
@@ -429,7 +432,7 @@ export function build() {
   const opens = cross + 0.06;
   ev('slashLine', opens, { at: 'vorthak.chest', from: [-90, -80], to: [90, 70], width: 9 });
   ev('slashLine', opens, { at: 'vorthak.chest', from: [-90, 70], to: [90, -80], width: 9, glow: '#a070ff' });
-  ev('impact', opens, { at: 'vorthak.chest', kind: 'slash', size: 2.5 });
+  ev('impact', opens, { at: 'vorthak.chest', kind: 'slash', size: 2.5, contact: false });
   ev('ring', opens, { at: 'vorthak.chest', size: 3, color: 'rgba(170,120,255,', life: 0.8 });
   ev('flash', opens, { color: '255,235,240', life: 0.5, strength: 0.7 });
   ev('impactFrames', opens, { count: 3 });
@@ -516,7 +519,7 @@ export function build() {
     });
   titleAt = shift(32.6);
 
-  return {
+  const scene = {
     duration: shift(34.4),
     order: ['vorthak', 'sora', 'kade'],
     tracks: { kade: K, sora: S, vorthak: V },
@@ -537,6 +540,9 @@ export function build() {
     },
     overlay: title,
   };
+  // Lunge strikers in so every blow lands on the body it hits.
+  scene.contacts = connect(scene);
+  return scene;
 }
 
 /** When the title card fades in; build() sets it once the scene is cut. */

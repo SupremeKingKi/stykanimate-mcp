@@ -48,6 +48,7 @@ const CARRIED = ['pose', 'x', 'air', 'facing', 'weapon', 'opacity', 'aura', 'aur
 export class Track {
   constructor(id, initial) {
     this.id = id;
+    this.nudges = [];
     this.keys = [{ t: 0, ease: 'linear', air: 0, facing: 1, weapon: false, opacity: 1, aura: 0, weaponGlow: 0, breathe: 0, trail: true, ...initial, pose: resolve(initial.pose ?? 'stand') }];
   }
 
@@ -102,7 +103,33 @@ export class Track {
       pose[joint] = keyed + this.settle(joint, t - delay) + life(this.id, joint, t);
     }
     base.pose = pose;
+    base.x += this.nudge(t);
     return base;
+  }
+
+  /**
+   * Lunge toward a target so a blow at `t` connects: the figure is carried
+   * `dx` further along x, easing in over the wind-up and back out after.
+   * contacts.mjs works these out from the gaps it measures.
+   */
+  addNudge(t, dx, { rise = 0.14, fall = 0.22 } = {}) {
+    const existing = this.nudges.find(n => Math.abs(n.t - t) < 1e-6);
+    if (existing) existing.dx += dx;
+    else this.nudges.push({ t, dx, rise, fall });
+  }
+
+  /** The strongest lunge in effect at `t`; overlapping lunges in a combo do not add up. */
+  nudge(t) {
+    let best = 0;
+    for (const n of this.nudges) {
+      const before = (t - (n.t - n.rise)) / n.rise;
+      const after = (t - n.t) / n.fall;
+      if (before <= 0 || after >= 1) continue;
+      const smooth = u => u * u * (3 - 2 * u);
+      const value = n.dx * (t <= n.t ? smooth(Math.min(1, before)) : 1 - smooth(after));
+      if (Math.abs(value) > Math.abs(best)) best = value;
+    }
+    return best;
   }
 
   /**

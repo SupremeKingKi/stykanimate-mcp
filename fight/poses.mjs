@@ -69,7 +69,7 @@ export const POSES = {
   roar: { lean: -18, head: -34, fs: 120, fe: 30, bs: 140, be: 30, fh: 30, fk: 20, bh: -26, bk: 26 },
   powerUp: { lean: 8, head: 10, fs: 30, fe: 70, bs: 25, be: 75, fh: 40, fk: 50, bh: -32, bk: 52 },
   backhandWind: { lean: 10, head: -20, fs: 5, fe: 110, bs: 30, be: 40, fh: 30, fk: 30, bh: -24, bk: 30 },
-  backhand: { lean: 18, head: -24, fs: 115, fe: 10, bs: 10, be: 40, fh: 34, fk: 30, bh: -28, bk: 26 },
+  backhand: { lean: 26, head: -24, fs: 90, fe: 6, bs: 10, be: 40, fh: 34, fk: 30, bh: -28, bk: 26 },
   catch: { lean: 14, head: -14, fs: 105, fe: 30, bs: 30, be: 45, fh: 30, fk: 30, bh: -24, bk: 30 },
   throw: { lean: 30, head: -14, fs: 150, fe: 20, bs: -10, be: 40, fh: 40, fk: 36, bh: -36, bk: 20 },
   smashWind: { lean: -12, head: -20, fs: 175, fe: 30, bs: 170, be: 30, fh: 60, fk: 80, bh: 20, bk: 90 },

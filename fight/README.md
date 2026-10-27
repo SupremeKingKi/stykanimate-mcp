@@ -47,6 +47,8 @@ Keys say where a pose is; `Track.at` loosens the motion between them so it reads
 - **Never still:** every figure drifts and breathes slightly, so a held pose is never a frozen frame. The legs are left out, so feet do not wander.
 - **Root arcs:** a step or lunge along the ground lifts the hips in a small arc.
 
+**Contact:** at the end of `build()`, `connect()` in `contacts.mjs` measures the gap between each striking fist, foot or blade and the body it hits, and lunges the striker in (or back, for a long weapon that overreaches) so the blow lands on the body. Mark an impact `contact: false` when no body is meant to be touched (a projectile, a blade into the floor, a dash that cuts through). Run `node fight/check-contacts.mjs fight/scenes/hall-duel.mjs --all` to see every gap.
+
 The renderer adds **recoil**: every impact jolts whoever takes it (trunk, then head, arms, and a short shove), even through a hit-stop.
 
 ## Events for big moments
