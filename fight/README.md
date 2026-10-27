@@ -10,7 +10,7 @@ npm run fight
 
 This writes `fight/out/kade-sora-vs-vorthak.mp4` (1280×720, 30 fps, with sound). It needs `ffmpeg` on the PATH, or set `FFMPEG` to its path, plus the optional `@napi-rs/canvas` package this repo already uses for rendering.
 
-`scenes/duel.mjs` is a 22-second one-on-one, Kade against Vorthak. It travels from the hall, through a pillar and the ruined end of the hall, out onto an open terrace. `npm run duel` writes `fight/out/kade-vs-vorthak.mp4`.
+`scenes/duel.mjs` is a 61-second one-on-one, Kade against Vorthak, in two parts. A storyboarded intro tells why they fight. A year ago, Vorthak beat Kade without trying. Kade trained until his colour ignited from grey to blue, then came back, and Vorthak went from bored to taking him seriously. Then the fight travels from the hall, through a pillar and the ruined end of the hall, out onto an open terrace. In part two (`scenes/duel-part2.mjs`), Vorthak rises again as a demon spewing red lightning and overpowers Kade, until Kade finds ice, wins a beam clash, freezes him solid and shatters the demon out of him. `npm run duel` writes `fight/out/kade-vs-vorthak.mp4`.
 
 ## Pieces
 
@@ -59,13 +59,29 @@ The renderer adds **recoil**: every impact jolts whoever takes it (trunk, then h
 
 A scene can lay out the stage with `stage: { layout: { ruin: [from, to] }, pillars: [x, ...] }`. Between `from` and `to` (world x along the fight) the back wall crumbles away to a light sky with distant mountains, the background pillars stand as stumps among rubble, and past `to` the floor carries on as an open terrace. `pillars` stand in the fighters' own plane. A `breakPillar` event (with an `x`) shatters the nearest one, leaving a stump while its top topples onto the floor. A scene without a layout gets the plain hall.
 
+## Storytelling
+
+- **Transformations:** keys can set `size` (grow or shrink a figure), `demon` (0 to 1: molten red veins, bigger horns, lightning crawling over the body) and `frozen` (0 to 1: frost over the body, then a shell of ice, which also puts out a demon's fire).
+- **Elements:** the events `bolt` (lightning between two points), `skyBolt` (lightning striking the floor), `iceWall`, `iceSpikes` (bursting up along the floor), `frost`, `frostFloor`, `shatter` (ice breaking off a body) and `beamClash` (an ice beam and a lightning beam meeting, pushed back and forth by `push`).
+- **Cuts:** a camera key with `cut: true` jumps to the new shot instead of gliding, and drops motion trails. Figures can be keyed with `ease: 'hold'` to be somewhere else in the next shot. Feet, smears and trails ignore the jump.
+- **Grade:** a camera key's `grade` (0 to 1) gives the picture a faded, sepia old-film look, for flashbacks.
+- **A changing colour:** a key's `signature` replaces the character's own colour (scarf, smears, trails, hit sparks) from that key on. `null` goes back to their own. Auras take any `auraColor`.
+- **Storyboard:** a scene can list its beats as `storyboard: [{ t, title, note }]`, and `node fight/storyboard.mjs fight/scenes/duel.mjs` renders one captioned panel per beat from the real frames.
+
 ## Syncing to the music
 
 A scene can call `syncToBeat(scene)` from `beats.mjs` at the end of `build()`, after `connect()`, as the duel does. The score then keeps a steady tempo, and the fight's clock bends smoothly between blows so heavy blows land on eighth notes and light ones on sixteenths. Every key, effect, lunge, camera key and music section moves with it. It replays the renderer's frame clock, counting hit-stops and slow motion, so the blows land on the beat in the finished video, not just in scene time. At 150 bpm a sixteenth is exactly three frames at 30 fps. After rendering, the tool prints how far each blow's sound is from the beat. A scene that does not sync keeps the old behaviour, where the drums re-phase to follow the hits.
 
 ## Sound effects
 
-Hits, blocks, clangs, slashes, landings and booms are built in `sfx.mjs` from recorded samples in `assets/sfx`: three Kenney.nl packs (Impact Sounds, RPG Audio, Sci-fi Sounds), all CC0, so no credit is required. Each named sound layers one or more recordings, sometimes over the synthesised sound for weight, and each time it plays it picks a random variant at a slightly random pitch. Without the samples, the synthesised sounds play on their own.
+Hits, blocks, clangs, slashes, whooshes, landings, booms, roars, growls, thunder, lightning zaps and ice are built in `sfx.mjs` from recorded samples in `assets/sfx`:
+
+- three Kenney.nl packs (Impact Sounds, RPG Audio, Sci-fi Sounds)
+- twelve OpenGameArt.org packs in `assets/sfx/oga`
+
+Most are CC0. Two OpenGameArt packs are CC-BY 3.0 and must be credited: qubodup's ice and electricity sounds, and InspectorJ's close thunder. [CREDITS.md](assets/sfx/CREDITS.md) lists every pack, and the duel's end card credits the two that need it.
+
+Each named sound layers one or more recordings, sometimes over the synthesised sound for weight. A layer draws from a pool that can span several packs, and each time the sound plays it picks a random variant at a slightly random pitch. Long recordings can be trimmed. Without the samples, the synthesised sounds play on their own.
 
 ## Using a song
 

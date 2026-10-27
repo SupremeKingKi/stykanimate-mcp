@@ -1,9 +1,14 @@
 /**
  * Effects: impact bursts, sparks, dust, shockwaves, slash lines, energy
- * waves and speech. They live in world space unless they say otherwise and
+ * waves, lightning, ice and speech. They live in world space unless they say otherwise and
  * run on video time, so they keep moving through a hit-stop freeze.
  */
 import { GROUND } from './stage.mjs';
+
+/** A hex colour as the start of an rgba() string, ready for an alpha: 'rgba(r,g,b,'. */
+function rgbaPrefix(hex) {
+  return 'rgba(' + [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(',') + ',';
+}
 
 /** A small seeded random source, so every render of a scene is the same. */
 export function random(seed = 7) {
@@ -66,7 +71,8 @@ export class Effects {
   impact(x, y, { kind = 'hit', size = 1, angle = 0, tint = null } = {}) {
     // Most blows are small. Save the big glowing burst for the ones that matter.
     if (size < 1.3 && !['heavy', 'dark'].includes(kind)) return this.lightImpact(x, y, { size, tint: tint ?? (PALETTE[kind] ?? PALETTE.hit).spark });
-    const color = PALETTE[kind] ?? PALETTE.hit;
+    // A blade's cut glows in the colour of whoever swung it.
+    const color = kind === 'slash' && tint ? { core: '#ffffff', glow: rgbaPrefix(tint), spark: tint } : PALETTE[kind] ?? PALETTE.hit;
     const r = this.rand;
     const spikes = Array.from({ length: 10 + Math.round(size * 4) }, () => ({ a: r() * Math.PI * 2, l: 0.5 + r() * 0.8 }));
     this.world.push({
@@ -418,6 +424,254 @@ export class Effects {
           ctx.stroke();
         }
         ctx.restore();
+      },
+    });
+  }
+
+  /**
+   * A lightning bolt from (x1, y1) to (x2, y2): a jagged glowing line that
+   * re-forks every few hundredths of a second while it lasts.
+   */
+  bolt(x1, y1, x2, y2, { color = '#ff2a3a', core = '#ffe6e6', width = 4, life = 0.18, branches = 2, jag = 22 } = {}) {
+    const seed = Math.floor(this.rand() * 1e6);
+    const path = flicker => {
+      const r = random(seed + flicker * 7919);
+      const length = Math.hypot(x2 - x1, y2 - y1);
+      const steps = Math.max(3, Math.round(length / 18));
+      const nx = -(y2 - y1) / (length || 1);
+      const ny = (x2 - x1) / (length || 1);
+      const points = [];
+      for (let i = 0; i <= steps; i += 1) {
+        const u = i / steps;
+        const off = i === 0 || i === steps ? 0 : (r() - 0.5) * 2 * jag * Math.sin(Math.PI * u) ** 0.5;
+        points.push([x1 + (x2 - x1) * u + nx * off, y1 + (y2 - y1) * u + ny * off]);
+      }
+      const forks = [];
+      for (let b = 0; b < branches; b += 1) {
+        const from = points[1 + Math.floor(r() * (points.length - 2))];
+        const angle = Math.atan2(y2 - y1, x2 - x1) + (r() - 0.5) * 1.6;
+        const len = length * (0.15 + r() * 0.2);
+        const fork = [from];
+        for (let i = 1; i <= 3; i += 1) fork.push([from[0] + Math.cos(angle) * len * (i / 3) + (r() - 0.5) * jag, from[1] + Math.sin(angle) * len * (i / 3) + (r() - 0.5) * jag]);
+        forks.push(fork);
+      }
+      return [points, ...forks];
+    };
+    this.world.push({
+      age: 0,
+      life,
+      draw(ctx, t) {
+        const lines = path(Math.floor(this.age / 0.035));
+        const fade = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        for (const [stroke, w, alpha] of [[color, width * 3.2, 0.35], [color, width * 1.6, 0.8], [core, width * 0.7, 1]]) {
+          ctx.strokeStyle = stroke;
+          ctx.globalAlpha = alpha * fade;
+          lines.forEach((line, i) => {
+            ctx.lineWidth = i === 0 ? w : w * 0.5;
+            ctx.beginPath();
+            line.forEach(([x, y], j) => (j ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+            ctx.stroke();
+          });
+        }
+        ctx.restore();
+      },
+    });
+  }
+
+  /** Lightning from the sky striking the floor at x: a tall bolt, a scorch mark and a spray of sparks. */
+  skyBolt(x, { color = '#ff2a3a', life = 0.25 } = {}) {
+    this.bolt(x + (this.rand() - 0.5) * 60, -700, x, GROUND, { color, width: 7, life, branches: 4, jag: 40 });
+    this.sparks(x, GROUND - 4, { count: 16, color: '#ff8080', speed: 380, angle: -Math.PI / 2, spread: 1.4 });
+    this.dust(x, { size: 1.2, count: 8 });
+    this.decals.push({
+      draw(ctx) {
+        const scorch = ctx.createRadialGradient(x, GROUND + 2, 2, x, GROUND + 2, 46);
+        scorch.addColorStop(0, 'rgba(40,10,14,0.55)');
+        scorch.addColorStop(1, 'rgba(40,10,14,0)');
+        ctx.fillStyle = scorch;
+        ctx.beginPath();
+        ctx.ellipse(x, GROUND + 2, 46, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+      },
+    });
+  }
+
+  /** Small motes of frost drifting up and away, for cold breath, ice auras and shattering. */
+  frost(x, y, { count = 10, spread = 40, speed = 60 } = {}) {
+    const r = this.rand;
+    for (let i = 0; i < count; i += 1) {
+      const p = { x: x + (r() - 0.5) * spread * 2, y: y + (r() - 0.5) * spread, vx: (r() - 0.5) * speed, vy: -r() * speed - 10, s: 1.5 + r() * 2.5 };
+      this.world.push({
+        age: 0,
+        life: 0.6 + r() * 0.7,
+        step(dt) {
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vx *= 0.97;
+        },
+        draw(ctx, t) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = (1 - t) * 0.9;
+          ctx.fillStyle = r() < 0.5 ? '#e8f8ff' : '#9fe8ff';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.s, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        },
+      });
+    }
+  }
+
+  /** Shards of ice thrown out from a point, for walls and frozen bodies breaking. */
+  shards(x, y, { count = 18, size = 1, spread = Math.PI } = {}) {
+    const r = this.rand;
+    for (let i = 0; i < count; i += 1) {
+      const a = -Math.PI / 2 + (r() - 0.5) * 2 * spread;
+      const v = (180 + r() * 420) * size;
+      const p = { x: x + (r() - 0.5) * 30, y: y + (r() - 0.5) * 40, vx: Math.cos(a) * v, vy: Math.sin(a) * v, spin: r() * 6, s: (5 + r() * 9) * size };
+      this.world.push({
+        age: 0,
+        life: 0.8 + r() * 0.5,
+        step(dt) {
+          p.vy += 1300 * dt;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          if (p.y > GROUND) {
+            p.y = GROUND;
+            p.vy *= -0.25;
+            p.vx *= 0.5;
+          }
+          p.spin += dt * 9;
+        },
+        draw(ctx, t) {
+          ctx.save();
+          ctx.globalAlpha = Math.min(1, (1 - t) * 2.5);
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.spin);
+          ctx.fillStyle = 'rgba(200,238,255,0.9)';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(0, -p.s);
+          ctx.lineTo(p.s * 0.45, p.s * 0.3);
+          ctx.lineTo(-p.s * 0.4, p.s * 0.5);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        },
+      });
+    }
+  }
+
+  /** A crystal of ice drawn standing on the floor. */
+  static iceCrystal(ctx, x, height, width, lean = 0) {
+    const fill = ctx.createLinearGradient(x, GROUND - height, x, GROUND);
+    fill.addColorStop(0, 'rgba(240,252,255,0.95)');
+    fill.addColorStop(1, 'rgba(120,200,250,0.8)');
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x - width / 2, GROUND);
+    ctx.lineTo(x - width * 0.2 + lean, GROUND - height * 0.75);
+    ctx.lineTo(x + lean, GROUND - height);
+    ctx.lineTo(x + width * 0.25 + lean, GROUND - height * 0.7);
+    ctx.lineTo(x + width / 2, GROUND);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  /**
+   * Spikes of ice bursting up out of the floor one after another, from x in
+   * direction `dir`, each a beat behind the last, then breaking away.
+   */
+  iceSpikes(x, dir = 1, { count = 7, spacing = 46, interval = 0.05, height = 80, life = 1.1 } = {}) {
+    const effects = this;
+    const r = this.rand;
+    const spikes = Array.from({ length: count }, (_, i) => ({
+      x: x + dir * i * spacing,
+      at: i * interval,
+      h: height * (0.7 + 0.5 * (i / count)) * (0.85 + r() * 0.3),
+      lean: (r() - 0.5) * 16,
+      burst: false,
+    }));
+    this.world.push({
+      age: 0,
+      life,
+      step() {
+        for (const spike of spikes) {
+          if (!spike.burst && this.age >= spike.at) {
+            spike.burst = true;
+            effects.frost(spike.x, GROUND - 10, { count: 5, spread: 16, speed: 90 });
+            effects.dust(spike.x, { size: 0.6, count: 3 });
+          }
+        }
+      },
+      draw(ctx, t) {
+        const age = t * life;
+        for (const spike of spikes) {
+          const grown = Math.min(1, Math.max(0, (age - spike.at) / 0.08));
+          if (grown <= 0) continue;
+          const fading = age > life - 0.25 ? (life - age) / 0.25 : 1;
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, fading);
+          Effects.iceCrystal(ctx, spike.x, spike.h * grown, 26, spike.lean);
+          Effects.iceCrystal(ctx, spike.x + 14 * dir, spike.h * 0.55 * grown, 18, spike.lean + 8 * dir);
+          ctx.restore();
+        }
+      },
+    });
+  }
+
+  /** A wall of ice that bursts up from the floor at x, takes a blow, and shatters. */
+  iceWall(x, { height = 170, width = 54, shatterAt = 0.45, life = 0.7 } = {}) {
+    const effects = this;
+    let broken = false;
+    this.world.push({
+      age: 0,
+      life,
+      step() {
+        if (!broken && this.age >= shatterAt) {
+          broken = true;
+          effects.shards(x, GROUND - height / 2, { count: 26, size: 1.2 });
+          effects.frost(x, GROUND - height / 2, { count: 16, spread: 30, speed: 120 });
+        }
+      },
+      draw(ctx, t) {
+        const age = t * life;
+        if (age >= shatterAt) return;
+        const grown = Math.min(1, age / 0.08);
+        Effects.iceCrystal(ctx, x, height * grown, width, -6);
+        Effects.iceCrystal(ctx, x - 22, height * 0.7 * grown, 34, -14);
+        Effects.iceCrystal(ctx, x + 20, height * 0.6 * grown, 30, 10);
+      },
+    });
+  }
+
+  /** A patch of frost spreading across the floor from x. It stays. */
+  frostFloor(x, { width = 160, grow = 0.6 } = {}) {
+    let age = 0;
+    this.world.push({ age: 0, life: grow, step(dt) { age += dt; }, draw() {} });
+    this.decals.push({
+      draw(ctx) {
+        const spread = Math.min(1, age / grow);
+        const w = width * spread;
+        if (w < 2) return;
+        const patch = ctx.createRadialGradient(x, GROUND, 2, x, GROUND, w);
+        patch.addColorStop(0, 'rgba(225,246,255,0.85)');
+        patch.addColorStop(0.7, 'rgba(170,225,255,0.45)');
+        patch.addColorStop(1, 'rgba(170,225,255,0)');
+        ctx.fillStyle = patch;
+        ctx.beginPath();
+        ctx.ellipse(x, GROUND + 2, w, 9, 0, 0, Math.PI * 2);
+        ctx.fill();
       },
     });
   }

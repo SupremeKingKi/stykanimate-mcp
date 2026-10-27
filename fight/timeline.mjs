@@ -3,8 +3,11 @@
  *
  * A track holds one character's keys in scene seconds. A key names a pose
  * and any of: x, air (height above the ground), facing, weapon, opacity,
- * aura, weaponGlow, trail (whether a swing leaves a ribbon), and how to
- * ease into it. A key leaves out what does
+ * aura, auraColor, weaponGlow, trail (whether a swing leaves a ribbon),
+ * signature (a colour that replaces the character's own from that key on),
+ * size (grows or shrinks the figure), demon (0 to 1, its demon form), frozen
+ * (0 to 1, encased in ice),
+ * and how to ease into it. A key leaves out what does
  * not change; it carries on from the key before it.
  */
 import { POSES } from './poses.mjs';
@@ -43,13 +46,13 @@ export const EASE = {
   hold: t => (t < 1 ? 0 : 1),
 };
 
-const CARRIED = ['pose', 'x', 'air', 'facing', 'weapon', 'opacity', 'aura', 'auraColor', 'weaponGlow', 'breathe', 'trail'];
+const CARRIED = ['pose', 'x', 'air', 'facing', 'weapon', 'opacity', 'aura', 'auraColor', 'weaponGlow', 'breathe', 'trail', 'signature', 'size', 'demon', 'frozen'];
 
 export class Track {
   constructor(id, initial) {
     this.id = id;
     this.nudges = [];
-    this.keys = [{ t: 0, ease: 'linear', air: 0, facing: 1, weapon: false, opacity: 1, aura: 0, weaponGlow: 0, breathe: 0, trail: true, ...initial, pose: resolve(initial.pose ?? 'stand') }];
+    this.keys = [{ t: 0, ease: 'linear', air: 0, facing: 1, weapon: false, opacity: 1, aura: 0, weaponGlow: 0, breathe: 0, trail: true, signature: null, size: 1, demon: 0, frozen: 0, ...initial, pose: resolve(initial.pose ?? 'stand') }];
   }
 
   /** The key at or just before `t`. */
@@ -195,8 +198,13 @@ export class Track {
       opacity: lerp('opacity'),
       aura: lerp('aura'),
       auraColor: b.auraColor ?? a.auraColor,
+      // A signature colour switches on its key: a character changing colour mid-video.
+      signature: raw >= 1 ? b.signature : a.signature,
       weaponGlow: lerp('weaponGlow'),
       breathe: lerp('breathe'),
+      size: lerp('size'),
+      demon: lerp('demon'),
+      frozen: lerp('frozen'),
       trail: a.trail && b.trail,
     };
   }
