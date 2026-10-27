@@ -10,7 +10,7 @@ npm run fight
 
 This writes `fight/out/kade-sora-vs-vorthak.mp4` (1280×720, 30 fps, with sound). It needs `ffmpeg` on the PATH, or set `FFMPEG` to its path, plus the optional `@napi-rs/canvas` package this repo already uses for rendering.
 
-`scenes/duel.mjs` is a shorter one-on-one, Kade against Vorthak, kept small for working on the engine. `npm run duel` writes `fight/out/kade-vs-vorthak.mp4`.
+`scenes/duel.mjs` is a 22-second one-on-one, Kade against Vorthak. It travels from the hall, through a pillar and the ruined end of the hall, out onto an open terrace. `npm run duel` writes `fight/out/kade-vs-vorthak.mp4`.
 
 ## Pieces
 
@@ -54,6 +54,10 @@ Keys say where a pose is; `Track.at` loosens the motion between them so it reads
 **Feet:** `feet.mjs` pins a foot where it touches the floor and re-bends the leg each frame (a two-bone hip and knee solve) so the body moves over it instead of the foot skating. When the animation pulls the foot more than 40px away, or the leg is overstretched, the foot takes a quick step and plants again. After a render the tool prints how far planted feet slid and how many steps each figure took; `--no-feet` turns locking off to compare.
 
 The renderer adds **recoil**: every impact jolts whoever takes it (trunk, then head, arms, and a short shove), even through a hit-stop.
+
+## Stage layout
+
+A scene can lay out the stage with `stage: { layout: { ruin: [from, to] }, pillars: [x, ...] }`. Between `from` and `to` (world x along the fight) the back wall crumbles away to a light sky with distant mountains, the background pillars stand as stumps among rubble, and past `to` the floor carries on as an open terrace. `pillars` stand in the fighters' own plane. A `breakPillar` event (with an `x`) shatters the nearest one, leaving a stump while its top topples onto the floor. A scene without a layout gets the plain hall.
 
 ## Syncing to the music
 
