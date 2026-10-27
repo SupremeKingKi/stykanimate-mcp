@@ -156,7 +156,7 @@ export async function render(scene, options) {
     }
 
     // Events whose moment has come.
-    while (nextEvent < events.length && events[nextEvent].t <= sceneTime + 1e-9) {
+    while (nextEvent < events.length && events[nextEvent].t <= sceneTime + 1e-6) {
       fire(events[nextEvent], { actors, effects, shakes, speech, sounds, videoTime, sceneTime, post, recoils, onFreeze: d => (freeze = Math.max(freeze, d)) });
       nextEvent += 1;
     }
@@ -349,7 +349,9 @@ function fire(event, { actors, effects, shakes, speech, sounds, videoTime, scene
         const strength = ['block', 'clang'].includes(event.kind) ? 0.65 : size < 1.3 ? 0.6 + 0.25 * size : Math.min(1.6, 1.1 + 0.2 * (size - 1.3));
         recoils.get(target.id).push({ start: sceneTime, strength, dir: Math.sign(target.place.x - by.place.x) || -target.place.facing });
       }
+      // Marked as a blow, so the beat report can find it.
       sound(event.sound ?? { hit: 'punch', heavy: 'heavy', block: 'block', clang: 'clang', slash: 'slash', dark: 'heavy', purple: 'energyHit' }[event.kind ?? 'hit'], event.gain ?? 1);
+      sounds[sounds.length - 1].blow = true;
       break;
     }
     case 'dust': {
@@ -735,7 +737,7 @@ async function sheet(frames, options) {
   await writeFile(options.out, await out.encode('png'));
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const options = parseArgs(process.argv.slice(2));
   const { build } = await import(pathToFileURL(path.resolve(options.scene)).href);
   const scene = build();
@@ -753,14 +755,30 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
       await muxAudio(`${options.out}.video.mp4`, wav, options.out);
     }
     console.log(`Wrote ${options.out}: ${outcome.frames} frames, ${outcome.videoTime.toFixed(2)}s, rendered in ${((Date.now() - started) / 1000).toFixed(1)}s.`);
+    if (scene.music?.locked) reportBeats(outcome.sounds, scene.music.bpm, scene.music.offset ?? 0);
     for (const [id, lock] of outcome.feet) console.log(`  ${id}: planted feet slid ${Math.round(lock.skate)}px in all, ${lock.steps} steps${lock.enabled ? '' : ' (foot locking off)'}`);
   }
+}
+
+/** How far each blow's sound lands from the nearest sixteenth note, in the finished video. */
+function reportBeats(sounds, bpm, offset = 0) {
+  const sixteenth = 60 / bpm / 4;
+  const blows = ['punch', 'heavy', 'block', 'clang', 'slash', 'energyHit'];
+  const offsets = sounds
+    .filter(sound => sound.blow && blows.includes(sound.name))
+    .map(sound => Math.abs(sound.time - offset - Math.round((sound.time - offset) / sixteenth) * sixteenth) * 1000);
+  if (!offsets.length) return;
+  const worst = Math.max(...offsets);
+  const mean = offsets.reduce((a, b) => a + b, 0) / offsets.length;
+  console.log(`  beat: ${offsets.length} blows, ${offsets.filter(o => o < 1).length} exactly on a sixteenth at ${bpm} bpm; mean ${mean.toFixed(1)}ms off, worst ${worst.toFixed(1)}ms`);
 }
 
 /** Move the score's sections from scene seconds onto the video's clock. */
 function toVideoTime(music, clock) {
   const video = t => (clock.find(([scene]) => scene >= t) ?? clock[clock.length - 1])[1];
-  return { ...music, sections: music.sections.map(part => ({ ...part, from: video(part.from), to: part.to >= clock[clock.length - 1][0] ? Infinity : video(part.to) })) };
+  const mapped = { ...music, sections: (music.sections ?? []).map(part => ({ ...part, from: video(part.from), to: part.to >= clock[clock.length - 1][0] ? Infinity : video(part.to) })) };
+  if (music.track?.duck) mapped.track = { ...music.track, duck: music.track.duck.map(d => ({ ...d, from: video(d.from), to: video(d.to) })) };
+  return mapped;
 }
 
 async function muxAudio(video, wav, out) {
