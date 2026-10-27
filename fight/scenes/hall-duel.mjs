@@ -430,7 +430,8 @@ export function build() {
   ev('sfx', cross, { name: 'slash', gain: 1 });
   ev('hitstop', cross + 0.02, { dur: 0.7 });
   const opens = cross + 0.06;
-  ev('slashLine', opens, { at: 'vorthak.chest', from: [-90, -80], to: [90, 70], width: 9 });
+  // Two figures cut at once, so each line names whose colour it is.
+  ev('slashLine', opens, { at: 'vorthak.chest', from: [-90, -80], to: [90, 70], width: 9, glow: '#2f8cff' });
   ev('slashLine', opens, { at: 'vorthak.chest', from: [-90, 70], to: [90, -80], width: 9, glow: '#a070ff' });
   ev('impact', opens, { at: 'vorthak.chest', kind: 'slash', size: 2.5, contact: false });
   ev('ring', opens, { at: 'vorthak.chest', size: 3, color: 'rgba(170,120,255,', life: 0.8 });
