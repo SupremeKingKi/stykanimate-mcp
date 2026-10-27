@@ -2,7 +2,7 @@
 
 A small tool for stick-figure fight animations, written in code and rendered to MP4.
 
-`scenes/hall-duel.mjs` is a 40-second fight in a stone hall, where Kade (fists, then a katana) and Sora (a scythe) take on Vorthak, a horned brute. It was made in the style of Stick Nodes combo animations.
+`scenes/hall-duel.mjs` is a 35-second fight in a stone hall, where Kade (fists, then a katana) and Sora (a scythe) take on Vorthak, a horned brute. It was made in the style of Stick Nodes combo animations.
 
 ```bash
 npm run fight
@@ -33,6 +33,10 @@ node fight/bake-clips.mjs
 ```
 
 A scene plays one with a `sprite` event, for example `{ type: 'sprite', t, at: 'vorthak.hip', ground: true, name: 'ground-dust-by-vamz', scale: 0.5 }`.
+
+## Readability
+
+Each character has a signature colour (Kade blue, Sora violet, Vorthak red). It colours their smears, which are flat in-between poses drawn when a limb or body moves far in one frame, their weapon trails, and the sparks of their hits. Light hits get a small star and specks; only heavy hits get the big burst. Camera keys with `fit: [min, max]` frame the figures they follow as tightly as the range allows, and pull back when someone is high in the air. The score's drum grid re-phases onto the hit sounds, so blows land on the beat.
 
 ## Events for big moments
 

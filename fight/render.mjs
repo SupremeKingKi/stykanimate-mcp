@@ -16,7 +16,7 @@ import { pathToFileURL } from 'node:url';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { Actor } from './characters.mjs';
 import { Effects, drawSpeech } from './effects.mjs';
-import { lowestPoint, solve } from './rig.mjs';
+import { lowestPoint, mix, solve } from './rig.mjs';
 import { drawForeground, drawStage, GROUND } from './stage.mjs';
 import { EASE } from './timeline.mjs';
 import { mixAudio } from './audio.mjs';
@@ -49,8 +49,13 @@ function parseTimes(text) {
   return text.split(',').map(Number);
 }
 
-/** Camera keys hold x, y, zoom, dim, bars and fade; a key may follow figures instead of naming x. */
-function cameraAt(keys, t, actors) {
+/**
+ * Camera keys hold x, y, zoom, dim, bars and fade; a key may follow figures
+ * instead of naming x. A key with `fit: [min, max]` zooms to frame the
+ * figures it follows as tightly as that range allows, and puts the floor low
+ * in the frame unless it names y.
+ */
+function cameraAt(keys, t, actors, view) {
   const resolve = key => {
     if (!key.follow) return key.x;
     const xs = key.follow.map(id => actors.get(id).place?.x ?? 0);
@@ -65,10 +70,20 @@ function cameraAt(keys, t, actors) {
   const lerp = (field, fallback) => (a[field] ?? fallback) + ((b[field] ?? a[field] ?? fallback) - (a[field] ?? fallback)) * s;
   // A following camera rises with figures in the air, so aerial fights stay in frame.
   const lift = key => (key.follow ? Math.max(...key.follow.map(id => actors.get(id).state?.air ?? 0)) * 0.55 : 0);
+  const zoomOf = key => {
+    if (!key.fit) return key.zoom ?? 1;
+    const xs = key.follow.map(id => actors.get(id).place?.x ?? 0);
+    const span = Math.max(...xs) - Math.min(...xs);
+    // Pull back for figures high in the air, so a juggle stays in the shot.
+    const air = Math.max(...key.follow.map(id => actors.get(id).state?.air ?? 0));
+    const fit = Math.min((view.width * 0.7) / (span + 200), (view.height * 0.72) / (air + 250));
+    return Math.min(key.fit[1], Math.max(Math.min(key.fit[0], fit), fit));
+  };
+  const yOf = key => key.y ?? GROUND - (view.height * 0.27) / zoomOf(key);
   return {
     x: resolve(a) + (resolve(b) - resolve(a)) * s,
-    y: lerp('y', 400) - (lift(a) + (lift(b) - lift(a)) * s),
-    zoom: lerp('zoom', 1),
+    y: yOf(a) + (yOf(b) - yOf(a)) * s - (lift(a) + (lift(b) - lift(a)) * s),
+    zoom: zoomOf(a) + (zoomOf(b) - zoomOf(a)) * s,
     dim: lerp('dim', 0),
     bars: lerp('bars', 0),
     fade: lerp('fade', 0),
@@ -102,6 +117,7 @@ export async function render(scene, options) {
   const speech = [];
   const history = new Map(scene.order.map(id => [id, { ghosts: [], trail: [] }]));
   let smoothX = null;
+  let smoothZoom = null;
   let smoothY = null;
   const eyes = new Map(scene.order.map(id => [id, []]));
 
@@ -158,8 +174,10 @@ export async function render(scene, options) {
     effects.update(freeze > 0 ? dt : step);
 
     // Camera, with a little lag when it follows, plus shake.
-    const cam = cameraAt(scene.camera, sceneTime, actors);
+    const cam = cameraAt(scene.camera, sceneTime, actors, view);
     smoothX = smoothX === null ? cam.x : smoothX + (cam.x - smoothX) * 0.18;
+    smoothZoom = smoothZoom === null ? cam.zoom : smoothZoom + (cam.zoom - smoothZoom) * 0.12;
+    cam.zoom = smoothZoom;
     smoothY = smoothY === null ? cam.y : smoothY + (cam.y - smoothY) * 0.14;
     cam.x = smoothX;
     cam.y = smoothY;
@@ -182,7 +200,7 @@ export async function render(scene, options) {
 
     for (const [id, actor] of actors) {
       const h = history.get(id);
-      h.ghosts.unshift({ solved: actor.solved, state: actor.state, place: actor.place, speed: Math.abs(actor.state.vx) });
+      h.ghosts.unshift({ solved: actor.solved, state: actor.state, place: actor.place, speed: Math.abs(actor.state.vx), reach: ['fist', 'backFist', 'foot', 'backFoot'].map(name => actor.point(name)) });
       h.ghosts.length = Math.min(h.ghosts.length, 5);
       h.trail.unshift(actor.state.trail === false ? null : actor.weaponLine());
       h.trail.length = Math.min(h.trail.length, 6);
@@ -240,12 +258,36 @@ function at(actors, event) {
   return { x: base.x + (event.ox ?? 0) * facing, y: base.y + (event.oy ?? 0) };
 }
 
+/**
+ * Who threw a blow: the figure named, if the hit is at its fist, foot or
+ * weapon; otherwise whoever has a fist, foot or blade nearest the hit.
+ */
+function attacker(actors, event, p) {
+  if (!event.at) return null;
+  const [id, name] = event.at.split('.');
+  if (['fist', 'backFist', 'foot', 'backFoot', 'tip'].includes(name)) return actors.get(id);
+  let best = null;
+  let bestDistance = Infinity;
+  for (const [other, actor] of actors) {
+    if (other === id) continue;
+    for (const part of ['fist', 'backFist', 'foot', 'backFoot', 'tip']) {
+      const q = actor.point(part);
+      const distance = Math.hypot(q.x - p.x, q.y - p.y);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = actor;
+      }
+    }
+  }
+  return best;
+}
+
 function fire(event, { actors, effects, shakes, speech, sounds, videoTime, post, onFreeze }) {
   const sound = (name, gain = 1) => sounds.push({ time: videoTime, name, gain });
   switch (event.type) {
     case 'impact': {
       const p = at(actors, event);
-      effects.impact(p.x, p.y, { kind: event.kind, size: event.size ?? 1, angle: event.angle ?? 0 });
+      effects.impact(p.x, p.y, { kind: event.kind, size: event.size ?? 1, angle: event.angle ?? 0, tint: attacker(actors, event, p)?.look.signature });
       sound(event.sound ?? { hit: 'punch', heavy: 'heavy', block: 'block', clang: 'clang', slash: 'slash', dark: 'heavy', purple: 'energyHit' }[event.kind ?? 'hit'], event.gain ?? 1);
       break;
     }
@@ -374,18 +416,10 @@ function paint(ctx, { scene, cam, view, actors, effects, history, speech, sceneT
       ctx.fill();
     }
 
-    // Afterimages behind a figure moving fast.
-    for (let i = h.ghosts.length - 1; i >= 1; i -= 1) {
-      const ghost = h.ghosts[i];
-      if (ghost.speed < 650 && h.ghosts[0].speed < 650) continue;
-      const keep = { solved: actor.solved, state: actor.state, place: actor.place };
-      Object.assign(actor, { solved: ghost.solved, state: ghost.state, place: ghost.place });
-      actor.draw(ctx, { alpha: 0.22 * (1 - i / h.ghosts.length), ropes: false });
-      Object.assign(actor, keep);
-    }
+    drawSmear(ctx, actor, h);
 
-    // A ribbon behind a swinging weapon.
-    drawTrail(ctx, h.trail, actor.look.weapon === 'scythe' ? '170,120,255' : '255,255,255');
+    // A ribbon behind a swinging weapon, in the fighter's colour.
+    drawTrail(ctx, h.trail, rgb(actor.look.signature));
 
     actor.draw(ctx, { glow: s.aura });
     if (h.eyes && s.aura > 0.3) drawEyeTrail(ctx, h.eyes, s.aura, actor.look.scale);
@@ -534,6 +568,42 @@ async function loadSprites(folder = 'fight/assets/sprites') {
     });
   }
   return sprites;
+}
+
+const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(',');
+
+/**
+ * Smears: when a limb or the whole body moves far in one frame, draw the
+ * in-between poses flat in the fighter's colour, so the motion reads as one
+ * stretched stroke rather than a jump.
+ */
+function drawSmear(ctx, actor, h) {
+  const [now, before] = h.ghosts;
+  if (!now || !before || !before.state) return;
+  const travel = Math.max(...now.reach.map((point, i) => Math.hypot(point.x - before.reach[i].x, point.y - before.reach[i].y)));
+  const body = Math.hypot(now.state.x - before.state.x, now.state.y - before.state.y);
+  if (travel < 32 && body < 22) return;
+  const color = actor.look.signature;
+  const steps = travel > 70 || body > 40 ? 4 : 2;
+  for (let i = 1; i <= steps; i += 1) {
+    const f = i / (steps + 1);
+    const state = {
+      ...now.state,
+      pose: mix(before.state.pose, now.state.pose, f),
+      x: before.state.x + (now.state.x - before.state.x) * f,
+      y: before.state.y + (now.state.y - before.state.y) * f,
+      facing: now.state.facing,
+      opacity: 1,
+    };
+    actor.drawPose(ctx, state, { silhouette: color, alpha: 0.16 + 0.3 * f });
+  }
+  // Older frames linger faintly behind a figure that is really flying.
+  if (body > 30) {
+    for (let i = h.ghosts.length - 1; i >= 2; i -= 1) {
+      const ghost = h.ghosts[i];
+      if (ghost.state) actor.drawPose(ctx, { ...ghost.state, opacity: 1 }, { silhouette: color, alpha: 0.12 * (1 - i / h.ghosts.length) });
+    }
+  }
 }
 
 function drawTrail(ctx, trail, rgb) {

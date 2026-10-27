@@ -2,7 +2,8 @@
  * The cast and how each one is drawn.
  *
  * A character is a colour scheme, a scale, the extras it wears (a scarf,
- * horns, a tail) and the weapons it can hold. Scarves, hair and tails are
+ * horns, a tail) and the weapons it can hold. Its signature colour marks
+ * everything it does: smears, weapon trails and the sparks of its hits. Scarves, hair and tails are
  * short rope chains simulated frame by frame, so they trail behind motion.
  */
 import { BODY, solve, toWorld } from './rig.mjs';
@@ -16,8 +17,9 @@ export const CAST = {
     eye: '#f4f4f4',
     limb: 6.5,
     torso: 8.5,
-    scarf: { color: '#d12b2b', links: 9, length: 7, width: 5 },
+    scarf: { color: '#2f8cff', links: 9, length: 7, width: 5 },
     weapon: 'katana',
+    signature: '#2f8cff',
   },
   sora: {
     name: 'Sora',
@@ -30,6 +32,7 @@ export const CAST = {
     hair: { color: '#b9c6ff', outline: '#2b2b38' },
     scarf: { color: '#8f5cff', links: 7, length: 6, width: 4 },
     weapon: 'scythe',
+    signature: '#a070ff',
   },
   vorthak: {
     name: 'Vorthak',
@@ -43,6 +46,7 @@ export const CAST = {
     claws: true,
     tail: { color: '#0d0b0e', links: 10, length: 7, width: 7 },
     weapon: null,
+    signature: '#ff2a3a',
   },
 };
 
@@ -163,7 +167,18 @@ export class Actor {
     return toWorld(local, this.place);
   }
 
-  draw(ctx, { glow = 0, alpha = 1, ropes = true } = {}) {
+  /** Draw the figure in another state, such as an in-between for a smear. */
+  drawPose(ctx, state, options) {
+    const keep = { solved: this.solved, state: this.state, place: this.place };
+    this.solved = solve(state.pose, this.look.scale, BODY);
+    this.state = state;
+    this.place = { x: state.x, y: state.y, facing: state.facing };
+    this.draw(ctx, { ...options, ropes: false });
+    Object.assign(this, keep);
+  }
+
+  /** `silhouette` draws the figure flat in one colour, without its details. */
+  draw(ctx, { glow = 0, alpha = 1, ropes = true, silhouette = null } = {}) {
     const look = this.look;
     const s = this.solved;
     const k = look.scale;
@@ -184,7 +199,11 @@ export class Actor {
     ctx.translate(this.place.x, this.place.y);
     ctx.scale(this.place.facing, 1);
 
-    const passes = look.outline ? [{ color: look.outline, extra: 3 }, { color: look.color, extra: 0 }] : [{ color: look.color, extra: 0 }];
+    const passes = silhouette
+      ? [{ color: silhouette, extra: 0 }]
+      : look.outline
+        ? [{ color: look.outline, extra: 3 }, { color: look.color, extra: 0 }]
+        : [{ color: look.color, extra: 0 }];
     const limbs = [
       ['backArm', () => [s.chest, s.back.elbow, s.back.hand], look.limb],
       ['backLeg', () => [s.hip, s.backLeg.knee, s.backLeg.ankle, s.backLeg.toe], look.limb],
@@ -197,7 +216,7 @@ export class Actor {
     for (const pass of passes) {
       // The back limbs read a touch darker so the figure has depth.
       for (const [, points, width] of limbs) {
-        stroke(ctx, points(), width * k + pass.extra, pass.extra ? pass.color : shade(pass.color, look.outline ? -0.12 : 0.18));
+        stroke(ctx, points(), width * k + pass.extra, pass.extra || silhouette ? pass.color : shade(pass.color, look.outline ? -0.12 : 0.18));
       }
       stroke(ctx, [s.hip, s.chest], look.torso * k + pass.extra, pass.color);
       stroke(ctx, [s.chest, s.neck], look.limb * k + pass.extra, pass.color);
@@ -206,18 +225,20 @@ export class Actor {
       ctx.fillStyle = pass.color;
       ctx.fill();
     }
-    if (look.horns) drawHorns(ctx, s, k);
-    if (look.hair) drawHair(ctx, s, k, look.hair);
-    drawEye(ctx, s, look, glow);
+    if (!silhouette) {
+      if (look.horns) drawHorns(ctx, s, k);
+      if (look.hair) drawHair(ctx, s, k, look.hair);
+      drawEye(ctx, s, look, glow);
+    }
 
     for (const pass of passes) {
       for (const [, points, width] of frontLimbs) stroke(ctx, points(), width * k + pass.extra, pass.color);
     }
-    if (look.claws) {
+    if (look.claws && !silhouette) {
       drawClaws(ctx, s.front.hand, s.front.foreA, k, look.color);
       drawClaws(ctx, s.back.hand, s.back.foreA, k, shade(look.color, 0.18));
     }
-    if (this.state.weapon && look.weapon) drawWeapon(ctx, look.weapon, s.front.hand, s.weaponA, k, this.state.weaponGlow ?? 0);
+    if (this.state.weapon && look.weapon && !silhouette) drawWeapon(ctx, look.weapon, s.front.hand, s.weaponA, k, this.state.weaponGlow ?? 0);
     ctx.restore();
   }
 }
@@ -352,7 +373,7 @@ function drawWeapon(ctx, kind, grip, angleDeg, k, glow) {
     stroke(ctx, [at(-9), at(4)], 4.5, '#1a1a1f');
     stroke(ctx, [at(4, -5), at(4, 5)], 3, '#c9a227');
     if (glow > 0) {
-      ctx.shadowColor = '#ff4a4a';
+      ctx.shadowColor = '#3a9bff';
       ctx.shadowBlur = 18 * glow;
     }
     ctx.beginPath();
