@@ -1,0 +1,12 @@
+{
+  "name": "Lightning Effect",
+  "source": "lightning-effect.stykmov",
+  "frames": 8,
+  "width": 750,
+  "height": 331,
+  "fps": 18,
+  "pivot": {
+    "x": -40.86659235414094,
+    "y": 118.18905933611316
+  }
+}

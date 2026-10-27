@@ -1,0 +1,12 @@
+{
+  "name": "Ground Dust",
+  "source": "ground-dust-by-vamz.stykmov",
+  "frames": 8,
+  "width": 960,
+  "height": 332,
+  "fps": 24,
+  "pivot": {
+    "x": 480,
+    "y": 121
+  }
+}

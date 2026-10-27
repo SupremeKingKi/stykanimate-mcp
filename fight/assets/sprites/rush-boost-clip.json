@@ -1,0 +1,12 @@
+{
+  "name": "Rush Boost 1 clip",
+  "source": "rush-boost-clip.stykmov",
+  "frames": 4,
+  "width": 174,
+  "height": 134,
+  "fps": 24,
+  "pivot": {
+    "x": 13,
+    "y": 68
+  }
+}
