@@ -34,6 +34,10 @@ angle, length or world position. Move an inverse kinematics target. Add, delete,
 retime keyframes. Recolour figures, parts, layers and the scene. Every change is one undoable
 step, and `history_undo` / `history_redo` walk back through them.
 
+**See the animation.** Draw any frame as a PNG with the app's own renderer, or a contact sheet of
+many frames side by side, so a model can look at a pose instead of only reading numbers. Turn on
+joint labels to see the handle and instance ids that `pose_set` takes.
+
 **Write a project.** Save as a StykAnimate project, a portable figure or a movieclip, or export
 to a Pivot `.piv` or `.stk` file.
 
@@ -145,6 +149,10 @@ front of it before exposing it beyond the machine.
   starts the bundled codec on demand and stops it again when it has been idle, so a session that
   only touches StykAnimate files never starts a Python process. Set `STYK_PYTHON` to choose a
   specific interpreter.
+- [`@napi-rs/canvas`](https://github.com/Brooooooklyn/canvas), **only** for `render_frame` and
+  `render_sheet`. It is an optional dependency with prebuilt binaries, so `npm ci` installs it on
+  Windows, macOS and Linux. Without it the server still reads and edits projects, and
+  `capabilities` reports `render: false`.
 
 ## The tools
 
@@ -176,11 +184,18 @@ front of it before exposing it beyond the machine.
 | `style_set` | Recolour a figure, a part, a layer or the scene. |
 | `history_undo` | Undo the last change. |
 | `history_redo` | Redo the last undone change. |
+| `render_frame` | Draw one frame as a PNG, optionally with joint labels. |
+| `render_sheet` | Draw several frames side by side on one PNG. |
 
 ### How a model should use it
 
 A typical conversation goes: `capabilities` → `project_open` → `project_describe` →
-`figure_describe` → `pose_evaluate` → a change → `pose_evaluate` again to check the result.
+`figure_describe` → `pose_evaluate` → a change → `pose_evaluate` again to check the result →
+`render_frame` or `render_sheet` to look at it.
+
+Rendering never moves the playhead, so it can be called between edits without changing which
+frame the other tools default to. Both render tools can also write the picture to a `.png` file;
+they refuse to replace an existing file unless `overwrite` is set.
 
 Two conventions matter:
 

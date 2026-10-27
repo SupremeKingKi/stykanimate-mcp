@@ -61,5 +61,8 @@
   "bugs": {
     "url": "https://github.com/ghassenTn/stykanimate-mcp/issues"
   },
-  "homepage": "https://stykanimate.com"
+  "homepage": "https://stykanimate.com",
+  "optionalDependencies": {
+    "@napi-rs/canvas": "1.0.10"
+  }
 }

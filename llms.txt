@@ -26,7 +26,9 @@ codec on demand.
 6. `pose_evaluate` — where every joint is at a tick.
 7. Change something: `pose_set`, `figure_transform`, `style_set`, `keyframe_edit`, `layer_edit`.
 8. `pose_evaluate` again to check the result.
-9. `project_save` to write it out.
+9. `render_frame` (one frame, `showJoints` for joint labels) or `render_sheet` (many frames on
+   one picture) to look at it.
+10. `project_save` to write it out.
 
 ## Conventions
 
@@ -77,6 +79,8 @@ codec on demand.
 | `style_set` | Recolour a figure, a part, a layer or the scene. |
 | `history_undo` | Undo the last change. |
 | `history_redo` | Redo the last undone change. |
+| `render_frame` | Draw one frame as a PNG, optionally with joint labels. |
+| `render_sheet` | Draw several frames side by side on one PNG. |
 
 ## Resources
 
