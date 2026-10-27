@@ -10,6 +10,8 @@ npm run fight
 
 This writes `fight/out/kade-sora-vs-vorthak.mp4` (1280×720, 30 fps, with sound). It needs `ffmpeg` on the PATH, or set `FFMPEG` to its path, plus the optional `@napi-rs/canvas` package this repo already uses for rendering.
 
+`scenes/duel.mjs` is a shorter one-on-one, Kade against Vorthak, kept small for working on the engine. `npm run duel` writes `fight/out/kade-vs-vorthak.mp4`.
+
 ## Pieces
 
 | File | What it does |
@@ -48,6 +50,8 @@ Keys say where a pose is; `Track.at` loosens the motion between them so it reads
 - **Root arcs:** a step or lunge along the ground lifts the hips in a small arc.
 
 **Contact:** at the end of `build()`, `connect()` in `contacts.mjs` measures the gap between each striking fist, foot or blade and the body it hits, and lunges the striker in (or back, for a long weapon that overreaches) so the blow lands on the body. Mark an impact `contact: false` when no body is meant to be touched (a projectile, a blade into the floor, a dash that cuts through). Run `node fight/check-contacts.mjs fight/scenes/hall-duel.mjs --all` to see every gap.
+
+**Feet:** `feet.mjs` pins a foot where it touches the floor and re-bends the leg each frame (a two-bone hip and knee solve) so the body moves over it instead of the foot skating. When the animation pulls the foot more than 40px away, or the leg is overstretched, the foot takes a quick step and plants again. After a render the tool prints how far planted feet slid and how many steps each figure took; `--no-feet` turns locking off to compare.
 
 The renderer adds **recoil**: every impact jolts whoever takes it (trunk, then head, arms, and a short shove), even through a hit-stop.
 

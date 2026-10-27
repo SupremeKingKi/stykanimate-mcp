@@ -20,9 +20,10 @@ import { lowestPoint, mix, solve } from './rig.mjs';
 import { drawForeground, drawStage, GROUND } from './stage.mjs';
 import { EASE } from './timeline.mjs';
 import { mixAudio } from './audio.mjs';
+import { FootLock } from './feet.mjs';
 
 function parseArgs(argv) {
-  const options = { scene: null, out: null, fps: 30, width: 1280, height: 720, sheet: null, cell: 320, audio: true };
+  const options = { scene: null, out: null, fps: 30, width: 1280, height: 720, sheet: null, cell: 320, audio: true, feet: true };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--out') options.out = argv[++i];
@@ -31,6 +32,7 @@ function parseArgs(argv) {
     else if (arg === '--sheet') options.sheet = parseTimes(argv[++i]);
     else if (arg === '--cell') options.cell = Number(argv[++i]);
     else if (arg === '--no-audio') options.audio = false;
+    else if (arg === '--no-feet') options.feet = false;
     else if (!options.scene) options.scene = arg;
     else throw new Error(`Unknown argument "${arg}".`);
   }
@@ -122,6 +124,8 @@ export async function render(scene, options) {
   const eyes = new Map(scene.order.map(id => [id, []]));
   // Every blow jolts whoever takes it, on top of whatever their keys say.
   const recoils = new Map(scene.order.map(id => [id, []]));
+  // Planted feet stay put while the body moves over them.
+  const feet = new Map(scene.order.map(id => [id, new FootLock({ enabled: options.feet !== false })]));
 
   const wantSheet = options.sheet ? [...options.sheet] : null;
   const sheetFrames = [];
@@ -146,6 +150,7 @@ export async function render(scene, options) {
       applyRecoil(state, recoils.get(id), sceneTime);
       const before = actor.place;
       state.y = GROUND - lowestPoint(solve(state.pose, actor.look.scale)) - state.air;
+      feet.get(id).apply(state, actor.look.scale, sceneTime);
       state.vx = before && step > 0 ? (state.x - before.x) / dt : 0;
       actor.update(state, Math.max(step, 0.0001));
     }
@@ -243,9 +248,9 @@ export async function render(scene, options) {
 
   if (encoder) {
     await encoder.close();
-    return { frames: frame, videoTime, sounds, clock };
+    return { frames: frame, videoTime, sounds, clock, feet };
   }
-  return { sheetFrames };
+  return { sheetFrames, feet };
 }
 
 function point(actors, spec) {
@@ -748,6 +753,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
       await muxAudio(`${options.out}.video.mp4`, wav, options.out);
     }
     console.log(`Wrote ${options.out}: ${outcome.frames} frames, ${outcome.videoTime.toFixed(2)}s, rendered in ${((Date.now() - started) / 1000).toFixed(1)}s.`);
+    for (const [id, lock] of outcome.feet) console.log(`  ${id}: planted feet slid ${Math.round(lock.skate)}px in all, ${lock.steps} steps${lock.enabled ? '' : ' (foot locking off)'}`);
   }
 }
 
