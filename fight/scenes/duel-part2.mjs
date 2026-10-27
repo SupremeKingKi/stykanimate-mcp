@@ -15,7 +15,8 @@
  *   8.7   a bolt shatters on an ice wall; spikes of ice; a lightning dive, parried
  *  10.8   lightning against ice, beam against beam, until the ice wins
  *  13.9   three cuts of ice freeze him solid
- *  16.2   Kade sheathes his sword, and the ice shatters
+ *  16.2   Kade sheathes his sword, and the ice shatters. The demon tears out
+ *         of him in silence; he reaches after Kade, his eyes go out, he falls
  */
 import { P, launch, jump } from '../timeline.mjs';
 
@@ -185,28 +186,61 @@ export function partTwo({ K, V, ev, start }) {
   // Frozen through, his fire goes out.
   V.key(T(14.85), null, { aura: 0 });
 
-  // Kade sheathes his sword with his back to him. On the click, the ice shatters.
+  // Kade sheathes his sword with his back to him. Silence, a heartbeat, and on the click the ice shatters.
   K.key(T(15.3), 'sheathe', { facing: 1, weaponGlow: 0, trail: false, aura: 0.2 });
   const shatter = T(16.2);
+  ev('sfx', T(15.45), { name: 'heartbeat', gain: 1.1 });
+  ev('sfx', T(15.9), { name: 'heartbeat', gain: 1.3 });
+  ev('sfx', shatter - 1.1, { name: 'suck', gain: 0.9 });
   K.key(shatter, 'stand', { weapon: false });
-  ev('sfx', shatter - 0.02, { name: 'block', gain: 0.6 });
-  ev('shatter', shatter, { at: 'vorthak.chest', count: 44, size: 1.5, gain: 1.4 });
-  ev('flash', shatter, { color: '220,245,255', life: 0.5, strength: 0.8 });
-  ev('impactFrames', shatter, { count: 2 });
-  ev('shake', shatter, { amount: 18, dur: 0.6 });
-  ev('sfx', shatter, { name: 'braam', gain: 1.2 });
-  ev('sfx', shatter, { name: 'boom', gain: 0.8 });
-  // The demon breaks with the ice: Vorthak is himself again, and falls.
-  // He stays frozen solid right up to the click.
+  ev('sfx', shatter - 0.02, { name: 'block', gain: 0.8 });
+  ev('shatter', shatter, { at: 'vorthak.chest', count: 60, size: 1.7, gain: 0 });
+  ev('sfx', shatter, { name: 'bigShatter', gain: 0.9 });
+  ev('sfx', shatter, { name: 'braam', gain: 0.8 });
+  ev('sfx', shatter, { name: 'boom', gain: 0.6 });
+  ev('sfx', shatter + 0.05, { name: 'ring', gain: 1 });
+  ev('flash', shatter, { color: '255,255,255', life: 0.7, strength: 1 });
+  ev('impactFrames', shatter, { count: 4 });
+  ev('shake', shatter, { amount: 24, dur: 1.2 });
+  ev('split', shatter, { amount: 14, dur: 0.6 });
+  ev('punch', shatter, { amount: 0.22, dur: 0.8 });
+  // The demon tears out of him: a giant red ghost rising and fading, lightning bursting out, embers.
+  ev('soul', shatter, { who: 'vorthak', life: 2.2, rise: 110, grow: 0.3 });
+  ev('ring', shatter, { at: 'vorthak.chest', size: 3.2, color: 'rgba(255,40,70,', life: 1 });
+  ev('sparks', shatter, { at: 'vorthak.chest', count: 50, color: '#ff3048', speed: 520, life: 0.8 });
+  for (const [dx, dy] of [[-230, -260], [-90, -330], [80, -300], [240, -220], [-280, -60], [300, -80]]) {
+    ev('bolt', shatter + 0.02, { from: 'vorthak.chest', to: { x: V.before(shatter).x + dx, y: 470 + dy }, life: 0.35, width: 5, branches: 3 });
+  }
+  ev('slowmo', shatter + 0.03, { dur: 0.75, scale: 0.28 });
+  ev('sfx', shatter + 0.15, { name: 'die', gain: 1.4 });
+  // He stays frozen solid right up to the click; then the ice and the demon are gone at once.
   V.hold(shatter);
-  V.key(shatter + 0.02, 'hurtLow', { frozen: 0, demon: 0, size: 1, aura: 0, ease: 'snap' });
-  V.key(T(16.7), 'kneel', { ease: 'out' });
-  V.key(T(17.4), 'down', { ease: 'in' });
-  ev('dust', T(17.4), { at: 'vorthak.hip', size: 1.6, count: 12 });
-  ev('sfx', T(17.4), { name: 'land' });
-  K.key(T(17.8), 'stand', { facing: -1, aura: 0 });
+  V.key(shatter + 0.02, P('roar', { lean: -32, head: -46, fs: 150, fe: 20, bs: 160, be: 20 }), { frozen: 0, demon: 0, size: 1, aura: 0, ease: 'snap' });
+  // He staggers, drops to his knees, turns, and reaches after Kade as his eyes flicker and go out.
+  V.key(shatter + 0.8, 'hurt', { dx: -45, ease: 'inOut' });
+  const knees = shatter + 1.25;
+  V.key(knees, 'kneel', { ease: 'in' });
+  ev('sfx', knees, { name: 'bodyFall', gain: 1.1 });
+  ev('dust', knees, { at: 'vorthak.foot', size: 1.2, count: 10 });
+  ev('shake', knees, { amount: 6, dur: 0.3 });
+  V.key(knees + 0.5, P('kneel', { head: -6 }), { facing: 1, ease: 'inOut' });
+  V.key(knees + 1.1, P('kneel', { fs: 92, fe: 12, head: -24, lean: 26 }), { ease: 'out' });
+  V.key(knees + 1.35, null, { eyes: 0.25, ease: 'linear' });
+  V.key(knees + 1.45, null, { eyes: 1, ease: 'linear' });
+  V.key(knees + 1.6, null, { eyes: 0.15, ease: 'linear' });
+  V.key(knees + 1.7, null, { eyes: 0.7, ease: 'linear' });
+  V.key(knees + 2.1, P('kneel', { fs: 40, fe: 30, head: 20, lean: 34 }), { eyes: 0, ease: 'inOut' });
+  // And he falls.
+  const fall = knees + 2.55;
+  V.key(fall, 'down', { ease: 'in' });
+  ev('sfx', fall, { name: 'bodyFall', gain: 1.4 });
+  ev('sfx', fall, { name: 'boom', gain: 0.6 });
+  ev('dust', fall, { at: 'vorthak.hip', size: 2.2, count: 18 });
+  ev('shake', fall, { amount: 10, dur: 0.4 });
+  // Only now does Kade turn to look.
+  K.key(fall + 0.9, 'stand', { facing: -1, aura: 0, ease: 'inOut' });
 
-  const end = T(20.4);
+  const end = fall + 4.4;
   const both = ['kade', 'vorthak'];
   const camera = [
     { t: T(0), follow: both, fit: [1.2, 1.6], dim: 0, bars: 0.8 },
@@ -219,19 +253,25 @@ export function partTwo({ K, V, ev, start }) {
     { t: T(8.4), follow: both, fit: [1.2, 1.8], dim: 0.4, bars: 0.8 },
     { t: T(11.0), follow: both, zoom: 1.6, dim: 0.5, bars: 1 },
     { t: T(13.4), follow: both, fit: [1.3, 1.8], dim: 0.4, bars: 0.8 },
-    { t: T(15.2), follow: ['vorthak'], zoom: 1.8, dim: 0.35, bars: 1 },
-    { t: T(16.2), follow: both, fit: [1.2, 1.6], dim: 0.2, bars: 1, ease: 'out' },
-    { t: T(17.6), follow: both, fit: [1.2, 1.5], dim: 0, bars: 1 },
-    { t: end - 0.6, follow: both, fit: [1.15, 1.4], dim: 0, bars: 1 },
-    { t: end, follow: both, fit: [1.15, 1.4], dim: 0, bars: 1, fade: 1 },
+    // Push in on him as the silence falls; stay close through the break; pull back wide as he falls.
+    { t: T(15.2), follow: ['vorthak'], zoom: 1.8, dim: 0.4, bars: 1 },
+    { t: shatter - 0.01, follow: ['vorthak'], zoom: 2.3, dim: 0.6, bars: 1 },
+    // Pull back fast as it breaks, so the ghost rising out of him stays in frame.
+    { t: shatter + 0.25, follow: ['vorthak'], zoom: 1.45, dim: 0.25, bars: 1, ease: 'out' },
+    { t: shatter + 1.0, follow: ['vorthak'], zoom: 1.7, dim: 0.25, bars: 1 },
+    { t: knees + 1.1, follow: ['vorthak'], ox: 60, zoom: 2.1, dim: 0.3, bars: 1 },
+    { t: fall + 1.2, follow: both, fit: [1.25, 1.6], dim: 0.2, bars: 1 },
+    { t: end - 0.6, follow: both, fit: [1.15, 1.4], dim: 0.15, bars: 1 },
+    { t: end, follow: both, fit: [1.15, 1.4], dim: 0.15, bars: 1, fade: 1 },
   ];
   // The song dips as the storm gathers and crashes in with the roar; dips again
   // while Kade kneels and swells as the ice wakes; and holds its breath before
-  // the shatter.
+  // the shatter, then cuts out altogether: the defeat plays in silence.
   const ducks = [
     { from: T(0.2), to: roar - 0.05, gain: 0.25 },
     { from: T(6.0), to: awaken - 0.05, gain: 0.3 },
-    { from: T(15.0), to: shatter - 0.05, gain: 0.2 },
+    { from: T(15.0), to: shatter - 0.05, gain: 0.07 },
+    { from: shatter - 0.05, to: end + 2, gain: 0 },
   ];
   const storyboard = [
     { t: T(0.6), title: 'The storm gathers', note: 'Red lightning crawls over the fallen Vorthak and strikes around him.' },
@@ -242,7 +282,9 @@ export function partTwo({ K, V, ev, start }) {
     { t: T(9.42), title: 'Wall and spikes', note: 'A bolt shatters on a wall of ice; spikes race along the floor at Vorthak.' },
     { t: T(11.9), title: 'Beam against beam', note: 'Lightning against ice, pushing back and forth in slow motion.' },
     { t: T(15.6), title: 'Frozen solid', note: 'Three cuts of ice. Kade sheathes his sword with his back to him.' },
-    { t: T(16.25), title: 'Shattered', note: 'On the click the ice breaks, and the demon with it. Vorthak is himself again.' },
+    { t: shatter + 0.12, title: 'Shattered', note: 'On the click the ice breaks. The music cuts out; the demon tears out of him as a red ghost.' },
+    { t: knees + 1.15, title: 'Reaching', note: 'On his knees, he turns and reaches after Kade. His eyes flicker.' },
+    { t: fall + 0.6, title: 'He falls', note: 'His eyes go out and he falls. Only then does Kade turn to look.' },
   ];
-  return { end, titleAt: T(18.0), camera, ducks, storyboard };
+  return { end, titleAt: fall + 1.6, camera, ducks, storyboard };
 }
