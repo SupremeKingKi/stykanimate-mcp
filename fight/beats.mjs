@@ -48,7 +48,14 @@ function makeWarp(anchors) {
  */
 function simulate(timing, warp, fps, frames) {
   const dt = 1 / fps;
-  const events = timing.map(e => ({ ...e, t: warp(e.t), end: e.type === 'slowmo' ? warp(e.t + e.dur) : 0 })).sort((a, b) => a.t - b.t);
+  // A slow-motion window ends where the renderer will see it end: its new start plus
+  // its new length, computed the same way, so rounding cannot put them a frame apart.
+  const events = timing
+    .map(e => {
+      const t = warp(e.t);
+      return { ...e, t, end: e.type === 'slowmo' ? t + (warp(e.t + e.dur) - t) : 0 };
+    })
+    .sort((a, b) => a.t - b.t);
   const slows = events.filter(e => e.type === 'slowmo');
   const scale = t => slows.reduce((s, e) => (t >= e.t && t < e.end ? Math.min(s, e.scale) : s), 1);
   const clock = [];
@@ -113,15 +120,24 @@ export function syncToBeat(scene, { bpm = scene.music?.bpm ?? 150, fps = 30, min
   // The estimate above ignores that the video moves in whole frames: a
   // hit-stop lasts a whole number of frames and an event fires on the first
   // frame at or after its time. So replay the renderer's clock and, blow by
-  // blow, pin each one to the scene time of the exact frame its beat falls on.
+  // blow, move each one until it fires on the exact frame its beat falls on.
+  // First pin it to the scene time that frame sees; if that frame is inside a
+  // hit-stop (scene time standing still, so nothing can fire there), nudge it
+  // by the frames it missed, which moves the hit-stop before it along too.
   const timing = scene.events.filter(e => ['impact', 'hitstop', 'slowmo'].includes(e.type));
+  const dt = 1 / fps;
   for (let i = 1; i < anchors.length; i += 1) {
     const frame = Math.round(landed[i - 1].target * fps);
-    const clock = simulate(timing, makeWarp(anchors), fps, frame + 1);
-    const pinned = clock[frame];
-    if (pinned === undefined || pinned <= anchors[i - 1][1] + 1e-4) continue;
-    const delta = pinned - anchors[i][1];
-    for (let j = i; j < anchors.length; j += 1) anchors[j][1] += delta;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const clock = simulate(timing, makeWarp(anchors), fps, frame + 60);
+      const at = anchors[i][1];
+      const fired = clock.findIndex(sceneTime => sceneTime >= at - 1e-6);
+      if (fired === frame) break;
+      const moving = frame > 0 && clock[frame] > clock[frame - 1] + 1e-9;
+      const next = attempt === 0 && moving ? clock[frame] : at + (frame - (fired < 0 ? frame : fired)) * dt * 0.9;
+      if (next <= anchors[i - 1][1] + 1e-4 || next === at) break;
+      for (let j = i; j < anchors.length; j += 1) anchors[j][1] += next - at;
+    }
   }
   const warp = makeWarp(anchors);
 
