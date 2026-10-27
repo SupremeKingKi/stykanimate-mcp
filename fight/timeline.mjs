@@ -6,7 +6,7 @@
  * aura, auraColor, weaponGlow, trail (whether a swing leaves a ribbon),
  * signature (a colour that replaces the character's own from that key on),
  * size (grows or shrinks the figure), demon (0 to 1, its demon form), frozen
- * (0 to 1, encased in ice),
+ * (0 to 1, encased in ice), eyes (1 lit, 0 gone out),
  * and how to ease into it. A key leaves out what does
  * not change; it carries on from the key before it.
  */
@@ -46,13 +46,13 @@ export const EASE = {
   hold: t => (t < 1 ? 0 : 1),
 };
 
-const CARRIED = ['pose', 'x', 'air', 'facing', 'weapon', 'opacity', 'aura', 'auraColor', 'weaponGlow', 'breathe', 'trail', 'signature', 'size', 'demon', 'frozen'];
+const CARRIED = ['pose', 'x', 'air', 'facing', 'weapon', 'opacity', 'aura', 'auraColor', 'weaponGlow', 'breathe', 'trail', 'signature', 'size', 'demon', 'frozen', 'eyes'];
 
 export class Track {
   constructor(id, initial) {
     this.id = id;
     this.nudges = [];
-    this.keys = [{ t: 0, ease: 'linear', air: 0, facing: 1, weapon: false, opacity: 1, aura: 0, weaponGlow: 0, breathe: 0, trail: true, signature: null, size: 1, demon: 0, frozen: 0, ...initial, pose: resolve(initial.pose ?? 'stand') }];
+    this.keys = [{ t: 0, ease: 'linear', air: 0, facing: 1, weapon: false, opacity: 1, aura: 0, weaponGlow: 0, breathe: 0, trail: true, signature: null, size: 1, demon: 0, frozen: 0, eyes: 1, ...initial, pose: resolve(initial.pose ?? 'stand') }];
   }
 
   /** The key at or just before `t`. */
@@ -205,6 +205,7 @@ export class Track {
       size: lerp('size'),
       demon: lerp('demon'),
       frozen: lerp('frozen'),
+      eyes: lerp('eyes'),
       trail: a.trail && b.trail,
     };
   }

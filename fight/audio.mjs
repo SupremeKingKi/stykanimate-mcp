@@ -143,7 +143,31 @@ function makeSounds(rand) {
   }
   // A sub drop that you feel more than hear.
   const boom = soft(add([envelope(sweep(2, 95, 26, 2.2), 0.004, 0.7), 1.4], [envelope(lowpass(noise(0.6, rand), 600), 0.002, 0.15), 0.8]));
-  return { punch, heavy, block, clang, slash, whoosh, energy, energyHit, roar: soft(roar), powerUp, land, step, braam: soft(braam), riser, boom, draw: slash, ice: block, shatter: heavy, thunder: boom, zap: energy, growl: roar, freeze: energy };
+  // A heartbeat: two low thumps, lub-dub.
+  const thump = envelope(sweep(0.3, 70, 38, 12), 0.004, 0.07);
+  const heartbeat = new Float32Array(Math.round(0.55 * RATE));
+  for (const [at, gain] of [[0, 1], [0.2, 0.7]]) {
+    const start = Math.round(at * RATE);
+    for (let i = 0; i < thump.length && start + i < heartbeat.length; i += 1) heartbeat[start + i] += thump[i] * gain;
+  }
+  // A reversed swell: noise and a tone that build up and stop dead, like time being sucked backwards.
+  const suckLen = Math.round(1.1 * RATE);
+  const suck = new Float32Array(suckLen);
+  const suckNoise = lowpass(noise(1.1, rand), t => 300 + (t / 1.1) ** 3 * 7000);
+  phase = 0;
+  for (let i = 0; i < suckLen; i += 1) {
+    const t = i / RATE;
+    phase += (2 * Math.PI * (60 + (t / 1.1) ** 2 * 220)) / RATE;
+    suck[i] = (suckNoise[i] * 1.2 + Math.sin(phase) * 0.4) * (t / 1.1) ** 3;
+  }
+  // The ringing in your ears after a blast: a high tone, slowly fading.
+  const ringLen = Math.round(3.5 * RATE);
+  const ring = new Float32Array(ringLen);
+  for (let i = 0; i < ringLen; i += 1) {
+    const t = i / RATE;
+    ring[i] = (Math.sin(2 * Math.PI * 2900 * t) * 0.6 + Math.sin(2 * Math.PI * 2930 * t) * 0.4) * 0.12 * Math.min(1, t / 0.08) * Math.exp(-t / 1.4);
+  }
+  return { punch, heavy, block, clang, slash, whoosh, energy, energyHit, roar: soft(roar), powerUp, land, step, braam: soft(braam), riser, boom, draw: slash, ice: block, shatter: heavy, thunder: boom, zap: energy, growl: roar, freeze: energy, heartbeat, suck, ring, die: roar, bigShatter: heavy, bodyFall: land };
 }
 
 /**
