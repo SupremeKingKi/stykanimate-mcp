@@ -143,7 +143,7 @@ function makeSounds(rand) {
   }
   // A sub drop that you feel more than hear.
   const boom = soft(add([envelope(sweep(2, 95, 26, 2.2), 0.004, 0.7), 1.4], [envelope(lowpass(noise(0.6, rand), 600), 0.002, 0.15), 0.8]));
-  return { punch, heavy, block, clang, slash, whoosh, energy, energyHit, roar: soft(roar), powerUp, land, step, braam: soft(braam), riser, boom, draw: slash };
+  return { punch, heavy, block, clang, slash, whoosh, energy, energyHit, roar: soft(roar), powerUp, land, step, braam: soft(braam), riser, boom, draw: slash, ice: block, shatter: heavy, thunder: boom, zap: energy, growl: roar, freeze: energy };
 }
 
 /**
@@ -335,8 +335,8 @@ export async function mixAudio(sounds, duration, file, music) {
   // Keep the peaks under full scale without squashing the quiet parts.
   let peak = 0;
   for (const value of mix) peak = Math.max(peak, Math.abs(value));
-  // 1dB of headroom, since AAC encoding overshoots the peaks a little.
-  const scale = peak > 0.89 ? 0.89 / peak : 1;
+  // 2dB of headroom, since AAC encoding overshoots the peaks a little.
+  const scale = peak > 0.8 ? 0.8 / peak : 1;
   const pcm = Buffer.alloc(44 + mix.length * 2);
   pcm.write('RIFF', 0);
   pcm.writeUInt32LE(36 + mix.length * 2, 4);
