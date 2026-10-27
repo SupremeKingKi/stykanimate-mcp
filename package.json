@@ -36,6 +36,7 @@
     "bundle": "node scripts/build-mcpb.mjs",
     "demo": "node scripts/demo-session.mjs",
     "fight": "node fight/render.mjs fight/scenes/hall-duel.mjs --out fight/out/kade-sora-vs-vorthak.mp4",
+    "duel": "node fight/render.mjs fight/scenes/duel.mjs --out fight/out/kade-vs-vorthak.mp4",
     "fight:poses": "node fight/gallery.mjs",
     "prepublishOnly": "npm run check && npm test",
     "publish:package": "npm publish --access public"
