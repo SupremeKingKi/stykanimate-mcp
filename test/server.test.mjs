@@ -69,6 +69,8 @@ test('the server lists its tools and describes itself', async t => {
     'style_set',
     'history_undo',
     'history_redo',
+    'render_frame',
+    'render_sheet',
   ]) {
     assert.ok(names.includes(expected), `the tool ${expected} is missing`);
   }

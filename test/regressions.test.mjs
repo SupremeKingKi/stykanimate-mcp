@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { Client, InMemoryTransport } from '@modelcontextprotocol/client';
 import { buildContainerV2, Editor, createStartupDocument } from '../src/core.js';
 import { createServer, createSession } from '../src/server.js';
@@ -149,7 +150,7 @@ test('a layer takes a colour the tool documents', async t => {
 });
 
 test('the server stops when the client closes the connection', async t => {
-  const child = spawn(process.execPath, [new URL('../src/index.js', import.meta.url).pathname], {
+  const child = spawn(process.execPath, [fileURLToPath(new URL('../src/index.js', import.meta.url))], {
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   t.after(() => child.kill('SIGKILL'));

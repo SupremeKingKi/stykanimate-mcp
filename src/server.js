@@ -12,6 +12,8 @@ import { registerPoseTools } from './tools/pose.js';
 import { registerTimelineTools } from './tools/timeline.js';
 import { registerLayerTools } from './tools/layer.js';
 import { registerHistoryTools } from './tools/history.js';
+import { registerRenderTools } from './tools/render.js';
+import { canRender } from './render.js';
 import { guard } from './errors.js';
 
 const VERSION = '0.1.0';
@@ -48,6 +50,7 @@ export function createServer({ store, codec = null, log = () => {} } = {}) {
   registerTimelineTools(tools, context);
   registerLayerTools(tools, context);
   registerHistoryTools(tools, context);
+  registerRenderTools(tools, context);
   registerResources(server, context);
 
   return server;
@@ -82,6 +85,7 @@ function registerCapabilityTools(server, { store, codec }) {
         keyframes: project.editor.report.keyframes.length,
         figureDefinitions: project.editor.report.figure_types.length,
       }));
+      const render = await canRender();
       return {
         content: [
           {
@@ -90,6 +94,7 @@ function registerCapabilityTools(server, { store, codec }) {
               `StykAnimate MCP ${VERSION}. Reads .styk, .stkz and .stykmov directly; ` +
               `${codec ? 'reads and writes .piv and .stk through the bundled Python codec' : 'cannot read Pivot files in this build'}. ` +
               `Writes .styk, .stkz, .stykmov${codec ? ', .piv and .stk' : ''}. ` +
+              `${render ? 'Renders frames and contact sheets as PNG' : 'Cannot render pictures: @napi-rs/canvas is not installed'}. ` +
               `${projects.length} project(s) open.`,
           },
         ],
@@ -99,6 +104,7 @@ function registerCapabilityTools(server, { store, codec }) {
           writes: ['styk', 'stkz', 'stykmov', ...(codec ? ['piv', 'stk'] : [])],
           pivotCodec: Boolean(codec),
           pythonCodecRunning: Boolean(codec?.running),
+          render,
           openProjects: projects,
         },      };
     },

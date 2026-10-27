@@ -8,10 +8,10 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const { Editor, createStartupDocument, buildContainerV2 } = await import(path.join(packageRoot, 'src/core.js'));
+const { Editor, createStartupDocument, buildContainerV2 } = await import(pathToFileURL(path.join(packageRoot, 'src/core.js')).href);
 
 const folder = await mkdtemp(path.join(tmpdir(), 'stykanimate-demo-'));
 const file = path.join(folder, 'blue.styk');

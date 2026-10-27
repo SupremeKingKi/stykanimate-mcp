@@ -7,7 +7,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sources = [];
@@ -45,7 +45,7 @@ console.log(`${sources.length} JavaScript files checked; ${failures} syntax erro
 
 // The tool names are the server's public interface, so a clash is a defect.
 const { Client, InMemoryTransport } = await import('@modelcontextprotocol/client');
-const { createServer, createSession } = await import(path.join(packageRoot, 'src/server.js'));
+const { createServer, createSession } = await import(pathToFileURL(path.join(packageRoot, 'src/server.js')).href);
 const server = createServer(createSession({ pivot: false }));
 const client = new Client({ name: 'check', version: '1.0.0' });
 const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
