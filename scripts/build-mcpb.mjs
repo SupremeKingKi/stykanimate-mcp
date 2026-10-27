@@ -14,7 +14,7 @@ import { cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outputRoot = path.resolve(process.argv[2] ?? path.join(packageRoot, 'build'));
@@ -42,7 +42,7 @@ const CONTENT = [
 
 /** The tool names and descriptions the bundle advertises. */
 async function toolList() {
-  const { createServer, createSession } = await import(path.join(packageRoot, 'src/server.js'));
+  const { createServer, createSession } = await import(pathToFileURL(path.join(packageRoot, 'src/server.js')).href);
   const { Client, InMemoryTransport } = await import('@modelcontextprotocol/client');
   const server = createServer(createSession({ pivot: false }));
   const client = new Client({ name: 'build-mcpb', version: '1.0.0' });
