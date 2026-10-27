@@ -63,7 +63,9 @@ export class Effects {
   }
 
   /** A burst of light where a blow lands. */
-  impact(x, y, { kind = 'hit', size = 1, angle = 0 } = {}) {
+  impact(x, y, { kind = 'hit', size = 1, angle = 0, tint = null } = {}) {
+    // Most blows are small. Save the big glowing burst for the ones that matter.
+    if (size < 1.3 && !['heavy', 'dark'].includes(kind)) return this.lightImpact(x, y, { size, tint: tint ?? (PALETTE[kind] ?? PALETTE.hit).spark });
     const color = PALETTE[kind] ?? PALETTE.hit;
     const r = this.rand;
     const spikes = Array.from({ length: 10 + Math.round(size * 4) }, () => ({ a: r() * Math.PI * 2, l: 0.5 + r() * 0.8 }));
@@ -102,12 +104,50 @@ export class Effects {
         ctx.restore();
       },
     });
-    this.sparks(x, y, { count: Math.round(8 + size * 10), color: color.spark, speed: 260 + size * 220, angle, spread: kind === 'block' || kind === 'clang' ? 1.4 : Math.PI });
+    this.sparks(x, y, { count: Math.round(8 + size * 10), color: tint ?? color.spark, speed: 260 + size * 220, angle, spread: kind === 'block' || kind === 'clang' ? 1.4 : Math.PI });
     if (size >= 1.4) this.ring(x, y, { color: color.glow, size });
   }
 
+  /** A small four-point star, a pinch of colour and a few dark specks. */
+  lightImpact(x, y, { size = 1, tint = '#ffffff' } = {}) {
+    const r = this.rand;
+    const turn = r() * Math.PI;
+    const radius = 14 + 12 * size;
+    this.world.push({
+      age: 0,
+      life: 0.14,
+      draw(ctx, t) {
+        const grow = t < 0.3 ? t / 0.3 : 1 - (t - 0.3) / 0.7;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(turn);
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = tint;
+        ctx.globalAlpha = 0.35 * grow;
+        ctx.beginPath();
+        ctx.arc(0, 0, radius * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        for (let i = 0; i < 4; i += 1) {
+          const a = (i * Math.PI) / 2;
+          const long = radius * (i % 2 ? 0.6 : 1) * grow;
+          ctx.lineTo(Math.cos(a) * long, Math.sin(a) * long);
+          ctx.lineTo(Math.cos(a + Math.PI / 4) * radius * 0.16, Math.sin(a + Math.PI / 4) * radius * 0.16);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      },
+    });
+    this.sparks(x, y, { count: 4, color: tint, speed: 240, life: 0.22 });
+    this.sparks(x, y, { count: 5, color: '#25252c', speed: 200, life: 0.35, width: 3, composite: 'source-over' });
+  }
+
   /** Short bright streaks thrown out from a point. */
-  sparks(x, y, { count = 12, color = '#ffd65a', speed = 320, angle = 0, spread = Math.PI, gravity = 700, life = 0.35, width = 2.2 } = {}) {
+  sparks(x, y, { count = 12, color = '#ffd65a', speed = 320, angle = 0, spread = Math.PI, gravity = 700, life = 0.35, width = 2.2, composite = 'lighter' } = {}) {
     const r = this.rand;
     for (let i = 0; i < count; i += 1) {
       const a = angle + (r() - 0.5) * 2 * spread;
@@ -128,7 +168,7 @@ export class Effects {
         },
         draw(ctx, t) {
           ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalCompositeOperation = composite;
           ctx.strokeStyle = color;
           ctx.globalAlpha = 1 - t;
           ctx.lineWidth = width;

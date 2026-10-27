@@ -4,6 +4,9 @@
  * Times are scene seconds. Kade fights bare-handed, then with a katana;
  * Sora carries a scythe; Vorthak fights with claws and power.
  *
+ * The times below are as written; build() then cuts three pauses (5.25s in
+ * all), so the rendered fight is tighter than these numbers suggest.
+ *
  *   0.0  the hall, Vorthak waiting; Kade and Sora run in
  *   6.6  Kade's rush, blocked, and the backhand that sends him flying
  *   7.9  Sora's leap, a miss, a parry, two clean hits; Vorthak roars
@@ -17,6 +20,7 @@
  *  28.7  the end
  */
 import { Track, P, run, strike, react, launch, jump, dash } from '../timeline.mjs';
+import { connect } from '../contacts.mjs';
 
 export function build() {
   const K = new Track('kade', { pose: 'stand', x: 150, facing: 1 });
@@ -46,7 +50,6 @@ export function build() {
 
   // 0.0 — The hall. Vorthak waits; the other two run in.
   V.key(0.8, 'taunt', { breathe: 0.4 });
-  say(0.8, 2.0, 'vorthak', 'More challengers... how tiresome.', '#3a0a10');
   V.key(2.4, 'hunch', { breathe: 1 });
   run(K, 0.9, 2.7, 1250);
   K.key(2.95, 'skid', { dx: 40, ease: 'out' });
@@ -57,9 +60,7 @@ export function build() {
   S.key(3.15, 'skid', { dx: 30, ease: 'out' });
   ev('dust', 2.95, { at: 'sora.foot', dir: 1, size: 0.7 });
   S.key(3.5, 'scytheReady');
-  say(3.5, 1.6, 'kade', "You're the one they call unbeatable?");
   V.key(5.0, 'taunt', { breathe: 0.3 });
-  say(5.1, 1.5, 'vorthak', 'Come and find out.', '#3a0a10');
   V.key(6.4, 'hunch', { breathe: 1 });
 
   // 6.6 — Kade rushes in. Every blow is blocked.
@@ -101,7 +102,7 @@ export function build() {
   swing(chopLands - 0.08, 0.7);
   V.key(8.3, 'crouch', { ease: 'out', breathe: 0 });
   V.key(8.48, 'hunch', { dx: 160, arc: 40, ease: 'out' });
-  ev('impact', chopLands, { at: 'sora.tip', kind: 'clang', size: 0.8, angle: -Math.PI / 2 });
+  ev('impact', chopLands, { at: 'sora.tip', kind: 'clang', size: 0.8, angle: -Math.PI / 2, contact: false });
   ev('dust', chopLands, { at: 'sora.tip', size: 0.8 });
   ev('shake', chopLands, { amount: 5, dur: 0.2 });
   S.key(8.75, 'scytheReady');
@@ -149,7 +150,6 @@ export function build() {
   S.key(11.2, 'scytheReady');
   V.hold(11.3);
   V.key(11.6, 'hunch', { breathe: 0.8 });
-  say(11.5, 1.5, 'vorthak', "Good. Now I'm interested.", '#3a0a10');
 
   // 13.0 — The double attack. Vorthak catches the blade and throws Kade into Sora.
   swing(13.0, 0.8);
@@ -158,7 +158,7 @@ export function build() {
   K.key(13.32, 'slashWind', { ease: 'out' });
   K.key(13.43, 'slash', { ease: 'snap', dx: 20 });
   V.key(13.35, 'catch', { ease: 'snap', breathe: 0 });
-  ev('impact', 13.43, { at: 'vorthak.fist', kind: 'clang', size: 1.2 });
+  ev('impact', 13.43, { at: 'vorthak.fist', kind: 'clang', size: 1.2, contact: false });
   ev('hitstop', 13.43, { dur: 0.08 });
   S.key(13.15, 'crouch', { ease: 'out' });
   S.key(13.45, 'scytheRaise', { x: 1520, air: 150, ease: 'out', moveEase: 'out' });
@@ -193,7 +193,6 @@ export function build() {
   V.key(15.8, 'powerUp', { aura: 0.6, auraColor: '#ff2040', ease: 'inOut', breathe: 0 });
   V.key(17.1, 'powerUp', { aura: 1 });
   ev('shake', 15.7, { amount: 3, dur: 1.7 });
-  say(15.9, 1.4, 'vorthak', 'Enough playing.', '#9b0f22');
   K.hold(16.4);
   K.key(16.75, 'rise');
   K.key(17.05, 'swordReady');
@@ -226,7 +225,9 @@ export function build() {
   V.key(18.25, 'dash', { ease: 'out', x: 1370 });
   V.key(18.3, 'upperWind', { ease: 'out' });
   const upper = 18.4;
-  V.key(upper, 'upper', { ease: 'snap' });
+  // The fist meets Kade's chin on the way up; the follow-through carries it overhead.
+  V.key(upper, P('upper', { lean: 25, fs: 55, fe: 60 }), { ease: 'snap' });
+  V.key(upper + 0.1, 'upper', { ease: 'out' });
   ev('impact', upper, { at: 'vorthak.fist', kind: 'dark', size: 1.8 });
   ev('hitstop', upper, { dur: 0.12 });
   ev('shake', upper, { amount: 14, dur: 0.35 });
@@ -270,7 +271,7 @@ export function build() {
   S.key(cast, 'scytheSweep', { ease: 'snap', weaponGlow: 0.3 });
   ev('wave', cast, { from: 'sora.chest', to: 'vorthak.chest', life: 0.28, size: 1.1 });
   const waveHits = cast + 0.28;
-  ev('impact', waveHits, { at: 'vorthak.chest', kind: 'purple', size: 1.8 });
+  ev('impact', waveHits, { at: 'vorthak.chest', kind: 'purple', size: 1.8, contact: false });
   ev('hitstop', waveHits, { dur: 0.1 });
   ev('shake', waveHits, { amount: 12, dur: 0.3 });
   ev('punch', waveHits, { amount: 0.1 });
@@ -397,7 +398,6 @@ export function build() {
   ev('shake', rage, { amount: 20, dur: 0.8 });
   ev('tilt', rage, { angle: 4, dur: 0.8 });
   ev('sprite', rage, { at: 'vorthak.hip', ground: true, name: 'ground-dust-by-vamz', scale: 0.55, tint: '#ffb0b8' });
-  say(rage + 0.1, 1.2, 'vorthak', 'INSECTS!', '#b0102a');
   K.key(rage + 0.05, 'flung', { dx: -170, air: 40, ease: 'snap' });
   K.key(rage + 0.4, 'skid', { air: 0, dx: -40, ease: 'out' });
   K.key(rage + 0.7, 'swordReady');
@@ -409,8 +409,6 @@ export function build() {
   V.key(26.1, 'hunch', { aura: 1.1 });
 
   // 26.3 — The finisher. The music drops out; both charge; they cross through him.
-  say(26.3, 1.0, 'sora', 'Kade, together!', '#3b2470');
-  say(26.75, 0.8, 'kade', 'Now!');
   K.key(26.7, 'sheathe', { weaponGlow: 1, ease: 'inOut', trail: false });
   S.key(26.7, 'scytheSweepWind', { weaponGlow: 1, ease: 'inOut' });
   ev('sfx', 26.6, { name: 'riser', gain: 1 });
@@ -434,7 +432,7 @@ export function build() {
   const opens = cross + 0.06;
   ev('slashLine', opens, { at: 'vorthak.chest', from: [-90, -80], to: [90, 70], width: 9 });
   ev('slashLine', opens, { at: 'vorthak.chest', from: [-90, 70], to: [90, -80], width: 9, glow: '#a070ff' });
-  ev('impact', opens, { at: 'vorthak.chest', kind: 'slash', size: 2.5 });
+  ev('impact', opens, { at: 'vorthak.chest', kind: 'slash', size: 2.5, contact: false });
   ev('ring', opens, { at: 'vorthak.chest', size: 3, color: 'rgba(170,120,255,', life: 0.8 });
   ev('flash', opens, { color: '255,235,240', life: 0.5, strength: 0.7 });
   ev('impactFrames', opens, { count: 3 });
@@ -457,7 +455,7 @@ export function build() {
   S.key(28.3, 'scytheReady', { weaponGlow: 0 });
 
   // 28.7 — The end.
-  say(28.7, 1.9, 'vorthak', '...Not bad... for insects.', '#3a0a10');
+  say(28.7, 1.2, 'vorthak', '...Not bad.', '#3a0a10');
   K.key(29.4, 'stand', { facing: -1 });
   S.key(29.6, 'stand', { facing: 1 });
   V.key(30.6, 'kneel');
@@ -466,12 +464,11 @@ export function build() {
   ev('sprite', 31.1, { at: 'vorthak.hip', ground: true, name: 'ground-dust-by-vamz', scale: 0.4 });
   ev('sfx', 31.1, { name: 'land' });
   ev('shake', 31.1, { amount: 8, dur: 0.3 });
-  say(31.4, 1.6, 'kade', 'Guess we found out.');
 
   const camera = [
-    { t: 0, x: 1700, y: 380, zoom: 1.55, bars: 1, fade: 1 },
-    { t: 0.7, x: 1700, y: 380, zoom: 1.55, bars: 1, fade: 0 },
-    { t: 2.2, x: 1650, y: 385, zoom: 1.5, bars: 1 },
+    { t: 0, x: 1700, y: 460, zoom: 2.1, bars: 1, fade: 1 },
+    { t: 0.7, x: 1700, y: 460, zoom: 2.1, bars: 1, fade: 0 },
+    { t: 2.2, x: 1650, y: 462, zoom: 2.0, bars: 1 },
     { t: 3.4, follow: ['kade', 'sora', 'vorthak'], y: 400, zoom: 1.25, bars: 0.6 },
     { t: 6.4, follow: ['kade', 'vorthak'], y: 400, zoom: 1.32, bars: 0.6 },
     { t: 7.4, follow: ['kade', 'vorthak'], y: 400, zoom: 1.45, bars: 0.6 },
@@ -501,32 +498,59 @@ export function build() {
     { t: 34.4, follow: ['kade', 'sora', 'vorthak'], y: 390, zoom: 1.12, bars: 1, fade: 1 },
   ];
 
-  return {
-    duration: 34.4,
+  // The pauses that held the talking, removed: everything after each gap moves up.
+  const gaps = [
+    [3.6, 6.55],
+    [11.9, 12.9],
+    [29.0, 30.3],
+  ];
+  const shift = t => gaps.reduce((moved, [from, to]) => (t >= to ? moved - (to - from) : t > from ? moved - (t - from) : moved), t);
+  const inGap = t => gaps.some(([from, to]) => t > from + 1e-9 && t < to - 1e-9);
+  for (const track of [K, S, V]) track.keys = track.keys.filter(key => !inGap(key.t)).map(key => ({ ...key, t: shift(key.t) }));
+  const cutEvents = events.filter(event => !inGap(event.t)).map(event => ({ ...event, t: shift(event.t) }));
+  const cutCamera = camera
+    .filter(key => !inGap(key.t))
+    .map(key => {
+      const moved = { ...key, t: shift(key.t) };
+      if (!key.follow) return moved;
+      // Close-ups stay close; every other following shot fits the fighters as tightly as it can.
+      const { zoom, y, ...rest } = moved;
+      return { ...rest, fit: zoom >= 1.6 ? [Math.min(2.2, zoom * 1.2), 2.2] : [1.5, 2.2] };
+    });
+  titleAt = shift(32.6);
+
+  const scene = {
+    duration: shift(34.4),
     order: ['vorthak', 'sora', 'kade'],
     tracks: { kade: K, sora: S, vorthak: V },
-    events,
-    camera,
+    events: cutEvents,
+    camera: cutCamera,
     music: {
       bpm: 150,
       sections: [
-        { from: 0, to: 6.6, level: 0 },
-        { from: 6.6, to: 15.4, level: 2 },
-        { from: 15.4, to: 17.4, level: 1 },
-        { from: 17.4, to: 21.9, level: 3 },
-        { from: 21.9, to: 22.6, level: 1 },
-        { from: 22.6, to: 25.2, level: 4 },
-        { from: 25.2, to: 26.6, level: 2 },
-        { from: 26.6, to: 35, level: 0 },
+        { from: 0, to: 3.6, level: 0 },
+        { from: shift(6.6), to: shift(15.4), level: 2 },
+        { from: shift(15.4), to: shift(17.4), level: 1 },
+        { from: shift(17.4), to: shift(21.9), level: 3 },
+        { from: shift(21.9), to: shift(22.6), level: 1 },
+        { from: shift(22.6), to: shift(25.2), level: 4 },
+        { from: shift(25.2), to: shift(26.6), level: 2 },
+        { from: shift(26.6), to: shift(35), level: 0 },
       ],
     },
     overlay: title,
   };
+  // Lunge strikers in so every blow lands on the body it hits.
+  scene.contacts = connect(scene);
+  return scene;
 }
+
+/** When the title card fades in; build() sets it once the scene is cut. */
+let titleAt = 32.6;
 
 /** The title card over the last two seconds. */
 function title(ctx, view, t) {
-  const fadeIn = Math.min(1, Math.max(0, (t - 32.6) / 0.6));
+  const fadeIn = Math.min(1, Math.max(0, (t - titleAt) / 0.6));
   if (fadeIn <= 0) return;
   ctx.save();
   ctx.globalAlpha = fadeIn;

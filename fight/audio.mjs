@@ -142,8 +142,31 @@ function makeSounds(rand) {
   return { punch, heavy, block, clang, slash, whoosh, energy, energyHit, roar: soft(roar), powerUp, land, step, braam: soft(braam), riser, boom };
 }
 
-/** The score: a low drone, and drums and bass that follow the scene's intensity. */
-function score(duration, music, rand) {
+/**
+ * The eighth-note grid the drums play on. It keeps a steady tempo but
+ * re-phases whenever a blow lands near a grid step, so that step falls
+ * exactly on the blow: the music follows the fight.
+ */
+function grid(duration, step, hits) {
+  const times = [];
+  const snapped = new Set();
+  let t = 0;
+  let next = 0;
+  while (t < duration) {
+    while (next < hits.length && hits[next] < t - step / 2) next += 1;
+    if (next < hits.length && Math.abs(hits[next] - t) <= step / 2) {
+      t = hits[next];
+      snapped.add(times.length);
+      next += 1;
+    }
+    times.push(t);
+    t += step;
+  }
+  return { times, snapped };
+}
+
+/** The score: a low drone, and drums and bass that follow the scene's intensity and its blows. */
+function score(duration, music, rand, hits = []) {
   const length = Math.round(duration * RATE);
   const out = new Float32Array(length);
   if (!music) return out;
@@ -170,18 +193,24 @@ function score(duration, music, rand) {
   const snare = add([envelope(highpass(noise(0.2, rand), 1200), 0.001, 0.05), 0.7], [envelope(sweep(0.12, 240, 180, 10), 0.001, 0.04), 0.4]);
   const tom = envelope(sweep(0.5, 95, 70, 6), 0.003, 0.16);
   const hat = envelope(highpass(noise(0.05, rand), 7000), 0.001, 0.012);
+  const crash = envelope(highpass(noise(1.4, rand), 4500), 0.002, 0.45);
   const place = (signal, at, gain) => {
     const start = Math.round(at * RATE);
     for (let i = 0; i < signal.length && start + i < length; i += 1) out[start + i] += signal[i] * gain;
   };
   // Bass notes walk a short minor riff on eighths.
   const riff = [73.4, 73.4, 87.3, 73.4, 98, 73.4, 87.3, 65.4];
-  for (let n = 0; n * beat * 0.5 < duration; n += 1) {
-    const t = n * beat * 0.5;
+  const { times, snapped } = grid(duration, beat * 0.5, hits);
+  for (const [n, t] of times.entries()) {
     const level = intensity(t);
     if (level <= 0) continue;
     const inBar = n % 8;
     if (inBar % 2 === 0) place(kick, t, 0.32 * Math.min(level, 2));
+    // A step that landed on a blow gets a kick and a crash of its own.
+    if (snapped.has(n)) {
+      if (inBar % 2 === 1) place(kick, t, 0.26 * Math.min(level, 2));
+      if (level >= 2) place(crash, t, 0.05 + 0.02 * Math.min(level, 4));
+    }
     if (level >= 2 && (inBar === 2 || inBar === 6)) place(snare, t, 0.18);
     if (level >= 3 && inBar === 7) place(tom, t, 0.22);
     // At full tilt: sixteenth-note hats and a tom answering every off-beat.
@@ -240,7 +269,14 @@ function reverb(signal, { wet = 0.25, feedback = 0.8, damping = 0.35 } = {}) {
 export async function mixAudio(sounds, duration, file, music) {
   const rand = random(99);
   const bank = makeSounds(rand);
-  const mix = score(duration + 0.5, music, rand);
+  // Blows the music should land on: the hit sounds, a fraction of a second apart at least.
+  const blows = ['punch', 'heavy', 'block', 'clang', 'slash', 'energyHit'];
+  const hits = sounds
+    .filter(sound => blows.includes(sound.name))
+    .map(sound => sound.time)
+    .sort((a, b) => a - b)
+    .filter((time, i, list) => i === 0 || time - list[i - 1] > 0.12);
+  const mix = score(duration + 0.5, music, rand, hits);
   const effects = new Float32Array(mix.length);
   for (const { time, name, gain } of sounds) {
     const signal = bank[name];
