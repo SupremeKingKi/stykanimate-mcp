@@ -40,6 +40,8 @@ async function canvasLibrary() {
       return library.createCanvas(width, height);
     }
   };
+  // Effects with filters (glows, blurs) hand pixels back through ImageData.
+  globalThis.ImageData ??= library.ImageData;
   return library;
 }
 
