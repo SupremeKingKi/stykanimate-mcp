@@ -1,10 +1,14 @@
 /**
- * Sound, made from scratch: every effect is synthesised from noise and
- * oscillators, and the score is a drone with a drum and bass pulse whose
- * intensity the scene sets. Nothing is sampled, so the soundtrack is ours.
+ * Sound. Effects are built in sfx.mjs from recorded CC0 samples layered over
+ * sounds synthesised here from noise and oscillators; without the samples the
+ * synthesised ones play alone. The bed is either a song the scene names or a
+ * synthesised score: a drone with a drum and bass pulse whose intensity the
+ * scene sets.
  */
 import { writeFile } from 'node:fs/promises';
 import { random } from './effects.mjs';
+import { decode } from './music.mjs';
+import { loadSfx, voice } from './sfx.mjs';
 
 const RATE = 44100;
 
@@ -139,22 +143,25 @@ function makeSounds(rand) {
   }
   // A sub drop that you feel more than hear.
   const boom = soft(add([envelope(sweep(2, 95, 26, 2.2), 0.004, 0.7), 1.4], [envelope(lowpass(noise(0.6, rand), 600), 0.002, 0.15), 0.8]));
-  return { punch, heavy, block, clang, slash, whoosh, energy, energyHit, roar: soft(roar), powerUp, land, step, braam: soft(braam), riser, boom };
+  return { punch, heavy, block, clang, slash, whoosh, energy, energyHit, roar: soft(roar), powerUp, land, step, braam: soft(braam), riser, boom, draw: slash };
 }
 
 /**
- * The eighth-note grid the drums play on. It keeps a steady tempo but
- * re-phases whenever a blow lands near a grid step, so that step falls
- * exactly on the blow: the music follows the fight.
+ * The eighth-note grid the drums play on. Normally it keeps a steady tempo
+ * but re-phases whenever a blow lands near a grid step, so that step falls
+ * exactly on the blow: the music follows the fight. A locked score (a fight
+ * synced to the beat) never re-phases; it only marks the steps blows land on.
  */
-function grid(duration, step, hits) {
+function grid(duration, step, hits, locked = false) {
   const times = [];
   const snapped = new Set();
   let t = 0;
   let next = 0;
   while (t < duration) {
     while (next < hits.length && hits[next] < t - step / 2) next += 1;
-    if (next < hits.length && Math.abs(hits[next] - t) <= step / 2) {
+    if (locked) {
+      if (next < hits.length && Math.abs(hits[next] - t) <= 0.035) snapped.add(times.length);
+    } else if (next < hits.length && Math.abs(hits[next] - t) <= step / 2) {
       t = hits[next];
       snapped.add(times.length);
       next += 1;
@@ -200,7 +207,7 @@ function score(duration, music, rand, hits = []) {
   };
   // Bass notes walk a short minor riff on eighths.
   const riff = [73.4, 73.4, 87.3, 73.4, 98, 73.4, 87.3, 65.4];
-  const { times, snapped } = grid(duration, beat * 0.5, hits);
+  const { times, snapped } = grid(duration, beat * 0.5, hits, music.locked);
   for (const [n, t] of times.entries()) {
     const level = intensity(t);
     if (level <= 0) continue;
@@ -232,6 +239,39 @@ function score(duration, music, rand, hits = []) {
     }
   }
   return lowpass(out, 5000);
+}
+
+/**
+ * A stretch of a song as the soundtrack: from `track.start` seconds in, at
+ * `track.gain`, dipped to `gain` inside each `duck` window (video seconds),
+ * and faded out over the last moment of the scene.
+ */
+async function songBed(track, duration) {
+  const length = Math.round(duration * RATE);
+  const out = new Float32Array(length);
+  out.set((await decode(track.file, { start: track.start, duration, rate: RATE })).subarray(0, length));
+  const ramp = 0.15;
+  const duckAt = t => {
+    let level = 1;
+    for (const d of track.duck ?? []) {
+      const into = Math.min(1, Math.max(0, (t - d.from) / ramp));
+      const outOf = Math.min(1, Math.max(0, (d.to - t) / ramp));
+      level = Math.min(level, 1 - (1 - d.gain) * Math.min(into, outOf));
+    }
+    return level;
+  };
+  const fade = 1.5;
+  for (let i = 0; i < length; i += 1) {
+    const t = i / RATE;
+    out[i] *= (track.gain ?? 0.6) * duckAt(t) * Math.min(1, (duration - 0.5 - t) / fade + 1 / fade);
+  }
+  return out;
+}
+
+/** A gentle limiter: untouched below 0.7, rounded off above it, never past 1. */
+function limit(x) {
+  const size = Math.abs(x);
+  return size < 0.7 ? x : Math.sign(x) * (0.7 + 0.3 * Math.tanh((size - 0.7) / 0.3));
 }
 
 /**
@@ -269,6 +309,9 @@ function reverb(signal, { wet = 0.25, feedback = 0.8, damping = 0.35 } = {}) {
 export async function mixAudio(sounds, duration, file, music) {
   const rand = random(99);
   const bank = makeSounds(rand);
+  // Recorded effects where there are any, layered over the synthesised ones.
+  const recorded = await loadSfx(RATE);
+  const variety = random(7);
   // Blows the music should land on: the hit sounds, a fraction of a second apart at least.
   const blows = ['punch', 'heavy', 'block', 'clang', 'slash', 'energyHit'];
   const hits = sounds
@@ -276,20 +319,24 @@ export async function mixAudio(sounds, duration, file, music) {
     .map(sound => sound.time)
     .sort((a, b) => a - b)
     .filter((time, i, list) => i === 0 || time - list[i - 1] > 0.12);
-  const mix = score(duration + 0.5, music, rand, hits);
+  // A real song plays as the bed when the scene names one; otherwise the synthesised score.
+  const mix = music?.track ? await songBed(music.track, duration + 0.5) : score(duration + 0.5, music, rand, hits);
   const effects = new Float32Array(mix.length);
   for (const { time, name, gain } of sounds) {
-    const signal = bank[name];
+    const signal = voice(name, recorded, bank, variety) ?? bank[name];
     if (!signal) throw new Error(`No sound named "${name}".`);
     const start = Math.round(time * RATE);
     for (let i = 0; i < signal.length && start + i < effects.length; i += 1) effects[start + i] += signal[i] * 0.55 * gain;
   }
   const wet = reverb(effects);
   for (let i = 0; i < mix.length; i += 1) mix[i] += wet[i];
+  // A mastered song leaves no headroom for the hits on top; round off just the peaks.
+  if (music?.track) for (let i = 0; i < mix.length; i += 1) mix[i] = limit(mix[i]);
   // Keep the peaks under full scale without squashing the quiet parts.
   let peak = 0;
   for (const value of mix) peak = Math.max(peak, Math.abs(value));
-  const scale = peak > 0.95 ? 0.95 / peak : 1;
+  // 1dB of headroom, since AAC encoding overshoots the peaks a little.
+  const scale = peak > 0.89 ? 0.89 / peak : 1;
   const pcm = Buffer.alloc(44 + mix.length * 2);
   pcm.write('RIFF', 0);
   pcm.writeUInt32LE(36 + mix.length * 2, 4);

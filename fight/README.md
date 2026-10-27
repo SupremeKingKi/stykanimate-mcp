@@ -55,6 +55,26 @@ Keys say where a pose is; `Track.at` loosens the motion between them so it reads
 
 The renderer adds **recoil**: every impact jolts whoever takes it (trunk, then head, arms, and a short shove), even through a hit-stop.
 
+## Syncing to the music
+
+A scene can call `syncToBeat(scene)` from `beats.mjs` at the end of `build()`, after `connect()`, as the duel does. The score then keeps a steady tempo, and the fight's clock bends smoothly between blows so heavy blows land on eighth notes and light ones on sixteenths. Every key, effect, lunge, camera key and music section moves with it. It replays the renderer's frame clock, counting hit-stops and slow motion, so the blows land on the beat in the finished video, not just in scene time. At 150 bpm a sixteenth is exactly three frames at 30 fps. After rendering, the tool prints how far each blow's sound is from the beat. A scene that does not sync keeps the old behaviour, where the drums re-phase to follow the hits.
+
+## Sound effects
+
+Hits, blocks, clangs, slashes, landings and booms are built in `sfx.mjs` from recorded samples in `assets/sfx`: three Kenney.nl packs (Impact Sounds, RPG Audio, Sci-fi Sounds), all CC0, so no credit is required. Each named sound layers one or more recordings, sometimes over the synthesised sound for weight, and each time it plays it picks a random variant at a slightly random pitch. Without the samples, the synthesised sounds play on their own.
+
+## Using a song
+
+The duel plays "Metalmania" by Kevin MacLeod (incompetech.com, CC BY 4.0), kept in `assets/music` with its credit in [CREDITS.md](assets/music/CREDITS.md). A video that uses it must carry that credit; the duel shows it on the end card.
+
+To use a song, name it in the scene's `music.track` (`file`, the `start` second, `gain`, and `duck` windows where it dips) and set `music.bpm` and `music.offset` to its beat. The song then replaces the synthesised score, and the hits play on top. To find those numbers:
+
+```bash
+node fight/music.mjs fight/assets/music/Metalmania.mp3 --seconds 14
+```
+
+It measures the tempo, where the beats and bar starts fall, and how loud each bar is, then suggests the strongest stretch that starts on a bar. Start the song on a bar start and the beat grid begins at the first frame (`offset: 0`).
+
 ## Events for big moments
 
 Besides impacts, dust and sparks, a scene can fire `slowmo` (`dur` and `scale` in scene seconds), `hitstop`, `punch` (a zoom kick), `tilt`, `split` (an RGB split), `impactFrames` (stark inverted frames), `crack` (floor cracks or a crater that stay) and the `braam`, `riser` and `boom` sounds.

@@ -11,6 +11,7 @@
  */
 import { Track, P, run, strike, react, launch, jump, dash } from '../timeline.mjs';
 import { connect } from '../contacts.mjs';
+import { syncToBeat } from '../beats.mjs';
 
 export function build() {
   const K = new Track('kade', { pose: 'stance', x: 1100, facing: 1 });
@@ -95,7 +96,7 @@ export function build() {
 
   // 4.0 — Sword out. Kade parries the claw and cuts twice; Vorthak grabs him and throws him.
   K.key(4.22, 'drawSword', { ease: 'out', weapon: true });
-  ev('sfx', 4.18, { name: 'slash', gain: 0.35 });
+  ev('sfx', 4.18, { name: 'draw', gain: 0.8 });
   K.key(4.42, 'swordReady');
   V.key(4.5, 'backhandWind', { ease: 'out' });
   const claw = 4.65;
@@ -172,17 +173,31 @@ export function build() {
     { t: 7.2, follow, fit: [2.0, 2.3], dim: 0.5, bars: 1 },
     { t: 7.45, follow, fit: [1.5, 2.0], dim: 0.2, bars: 0.7, ease: 'out' },
     { t: 9.2, follow, fit: [1.4, 1.8], bars: 1 },
-    { t: 10.6, follow, fit: [1.4, 1.7], bars: 1, fade: 1 },
+    { t: 11.0, follow, fit: [1.4, 1.7], bars: 1 },
+    { t: 11.6, follow, fit: [1.4, 1.7], bars: 1, fade: 1 },
   ];
 
   const scene = {
-    duration: 10.6,
+    duration: 11.6,
     order: ['vorthak', 'kade'],
     tracks: { kade: K, vorthak: V },
     events,
     camera,
     music: {
+      // "Metalmania" by Kevin MacLeod (incompetech.com, CC BY 4.0). fight/music.mjs measures it at
+      // 150 bpm with bars every 1.6s from 0.025s; its snare lands within 2ms of that grid. Bar 75,
+      // at 120.025s, starts its strongest stretch, so the duel plays from there and the song's
+      // beats fall every 0.4s from the first frame.
       bpm: 150,
+      offset: 0,
+      track: {
+        file: 'fight/assets/music/Metalmania.mp3',
+        start: 120.025,
+        // Metalmania is mastered loud; this leaves the hits room on top.
+        gain: 0.42,
+        // The song drops away under the last charge and crashes back in on the cut.
+        duck: [{ from: 6.9, to: 7.42, gain: 0.2 }],
+      },
       sections: [
         { from: 0, to: 1, level: 1 },
         { from: 1, to: 6.9, level: 3 },
@@ -191,14 +206,20 @@ export function build() {
     },
     overlay: title,
   };
-  // Lunge strikers in so every blow lands on the body it hits.
+  // Lunge strikers in so every blow lands on the body it hits,
+  // then bend the timing so every blow lands on the beat.
   scene.contacts = connect(scene);
+  scene.beats = syncToBeat(scene);
+  titleAt = scene.beats.warp(9.1);
   return scene;
 }
 
-/** The title card over the last second and a half. */
+/** When the title card fades in; build() moves it with the beat sync. */
+let titleAt = 9.1;
+
+/** The title card and music credit over the last two and a half seconds. */
 function title(ctx, view, t) {
-  const fadeIn = Math.min(1, Math.max(0, (t - 9.1) / 0.5));
+  const fadeIn = Math.min(1, Math.max(0, (t - titleAt) / 0.5));
   if (fadeIn <= 0) return;
   ctx.save();
   ctx.globalAlpha = fadeIn;
@@ -210,5 +231,14 @@ function title(ctx, view, t) {
   ctx.strokeText('KADE  vs  VORTHAK', view.width / 2, view.height * 0.3);
   ctx.fillStyle = '#f3f3f7';
   ctx.fillText('KADE  vs  VORTHAK', view.width / 2, view.height * 0.3);
+  // The music credit CC BY asks for.
+  ctx.font = 'bold 19px Bahnschrift';
+  ctx.lineWidth = 5;
+  const credit = ['Music: "Metalmania" by Kevin MacLeod (incompetech.com)', 'Licensed under Creative Commons: By Attribution 4.0 License'];
+  credit.forEach((line, i) => {
+    const y = view.height * 0.3 + 56 + i * 26;
+    ctx.strokeText(line, view.width / 2, y);
+    ctx.fillText(line, view.width / 2, y);
+  });
   ctx.restore();
 }
