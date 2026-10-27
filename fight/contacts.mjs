@@ -20,7 +20,7 @@ export function poseAt(scene, t) {
   for (const id of scene.order) {
     const actor = new Actor(id);
     const state = scene.tracks[id].at(t);
-    state.y = GROUND - lowestPoint(solve(state.pose, actor.look.scale)) - state.air;
+    state.y = GROUND - lowestPoint(solve(state.pose, actor.scaleOf(state))) - state.air;
     state.vx = 0;
     actor.update(state, 1 / 30);
     actors.set(id, actor);
@@ -33,7 +33,7 @@ const STRIKERS = ['fist', 'backFist', 'foot', 'backFoot', 'tip'];
 /** The body of a figure as world-space segments, with how thick each one is drawn. */
 function bodySegments(actor) {
   const s = actor.solved;
-  const k = actor.look.scale;
+  const k = actor.scaleOf();
   const w = point => ({ x: actor.place.x + point.x * actor.place.facing, y: actor.place.y + point.y });
   const chains = [
     [[s.hip, s.chest], actor.look.torso * k],

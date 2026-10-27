@@ -114,16 +114,21 @@ export class Actor {
     this.place = null;
   }
 
+  /** How big the figure is drawn: its own scale, times any size its keys give it. */
+  scaleOf(state = this.state) {
+    return this.look.scale * (state?.size ?? 1);
+  }
+
   /** Solve the pose at this frame and move the ropes along with it. */
   update(state, dt) {
-    const solved = solve(state.pose, this.look.scale, BODY);
+    const solved = solve(state.pose, this.scaleOf(state), BODY);
     this.solved = solved;
     this.state = state;
     this.place = { x: state.x, y: state.y, facing: state.facing };
     const wind = -state.vx * 3;
     if (this.scarf) this.scarf.update(toWorld(solved.neck, this.place), dt, { gravity: 500, drag: 0.9, wind: wind - state.facing * 260 });
     if (this.tail) {
-      const hip = toWorld({ x: -4 * this.look.scale, y: 2 }, this.place);
+      const hip = toWorld({ x: -4 * this.scaleOf(state), y: 2 }, this.place);
       // A tail lifts and sways behind the figure rather than dragging on the floor.
       this.sway = (this.sway ?? 0) + dt;
       const sway = Math.sin(this.sway * 2.4) * 160;
@@ -135,12 +140,17 @@ export class Actor {
   weaponLine() {
     if (!this.state?.weapon || !this.look.weapon) return null;
     const s = this.solved;
-    const { length } = weaponShape(this.look.weapon, this.look.scale);
+    const { length } = weaponShape(this.look.weapon, this.scaleOf());
     const grip = s.front.hand;
     const angle = (s.weaponA * Math.PI) / 180;
     const tip = { x: grip.x + Math.sin(angle) * length, y: grip.y - Math.cos(angle) * length };
     const back = { x: grip.x - Math.sin(angle) * length * 0.12, y: grip.y + Math.cos(angle) * length * 0.12 };
     return { grip: toWorld(grip, this.place), tip: toWorld(tip, this.place), back: toWorld(back, this.place) };
+  }
+
+  /** The colour that marks this figure right now: its key's signature colour, or its own. */
+  signature() {
+    return this.state?.signature ?? this.look.signature;
   }
 
   /** Where the eye sits in the world, for the boss's glowing eye trail. */
@@ -170,7 +180,7 @@ export class Actor {
   /** Draw the figure in another state, such as an in-between for a smear. */
   drawPose(ctx, state, options) {
     const keep = { solved: this.solved, state: this.state, place: this.place };
-    this.solved = solve(state.pose, this.look.scale, BODY);
+    this.solved = solve(state.pose, this.scaleOf(state), BODY);
     this.state = state;
     this.place = { x: state.x, y: state.y, facing: state.facing };
     this.draw(ctx, { ...options, ropes: false });
@@ -181,7 +191,7 @@ export class Actor {
   draw(ctx, { glow = 0, alpha = 1, ropes = true, silhouette = null } = {}) {
     const look = this.look;
     const s = this.solved;
-    const k = look.scale;
+    const k = this.scaleOf();
     ctx.save();
     ctx.globalAlpha *= alpha * (this.state.opacity ?? 1);
     ctx.lineCap = 'round';
@@ -194,7 +204,7 @@ export class Actor {
 
     // Ropes are in world space already.
     if (ropes && this.tail) drawRope(ctx, this.tail.points, look.tail.color, look.tail.width * k, 1.5 * k);
-    if (ropes && this.scarf) drawRope(ctx, this.scarf.points, look.scarf.color, look.scarf.width * k, 1 * k, look.outline);
+    if (ropes && this.scarf) drawRope(ctx, this.scarf.points, this.state.signature ?? look.scarf.color, look.scarf.width * k, 1 * k, look.outline);
 
     ctx.translate(this.place.x, this.place.y);
     ctx.scale(this.place.facing, 1);
@@ -226,7 +236,7 @@ export class Actor {
       ctx.fill();
     }
     if (!silhouette) {
-      if (look.horns) drawHorns(ctx, s, k);
+      if (look.horns) drawHorns(ctx, s, k, 1 + 0.5 * (this.state.demon ?? 0));
       if (look.hair) drawHair(ctx, s, k, look.hair);
       drawEye(ctx, s, look, glow);
     }
@@ -238,7 +248,40 @@ export class Actor {
       drawClaws(ctx, s.front.hand, s.front.foreA, k, look.color);
       drawClaws(ctx, s.back.hand, s.back.foreA, k, shade(look.color, 0.18));
     }
-    if (this.state.weapon && look.weapon && !silhouette) drawWeapon(ctx, look.weapon, s.front.hand, s.weaponA, k, this.state.weaponGlow ?? 0);
+    if (this.state.weapon && look.weapon && !silhouette) drawWeapon(ctx, look.weapon, s.front.hand, s.weaponA, k, this.state.weaponGlow ?? 0, this.signature());
+    const chains = [
+      [s.chest, s.back.elbow, s.back.hand],
+      [s.hip, s.backLeg.knee, s.backLeg.ankle],
+      [s.hip, s.chest, s.neck],
+      [s.hip, s.frontLeg.knee, s.frontLeg.ankle],
+      [s.chest, s.front.elbow, s.front.hand],
+    ];
+    // The demon form: molten red veins glowing through every limb.
+    // Ice smothers the fire: the veins fade as the figure freezes.
+    const demon = (this.state.demon ?? 0) * (1 - 0.85 * Math.min(1, this.state.frozen ?? 0));
+    if (demon > 0.01 && !silhouette) {
+      ctx.save();
+      ctx.globalAlpha *= Math.min(1, demon);
+      ctx.shadowColor = '#ff1a2a';
+      ctx.shadowBlur = 14;
+      for (const chain of chains) stroke(ctx, chain, 2.2 * k, '#ff3a3a');
+      ctx.restore();
+    }
+    // Frozen: frost over the whole body, then a shell of ice around it.
+    const frozen = this.state.frozen ?? 0;
+    if (frozen > 0.01 && !silhouette) {
+      ctx.save();
+      // No aura glow bleeds into the ice.
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha *= Math.min(1, frozen) * 0.85;
+      for (const chain of chains) stroke(ctx, chain, look.limb * k + 1, '#d6f2ff');
+      ctx.beginPath();
+      ctx.arc(s.head.x, s.head.y, s.headR + 0.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#d6f2ff';
+      ctx.fill();
+      if (frozen > 0.4) drawIceShell(ctx, s, k, Math.min(1, (frozen - 0.4) / 0.6));
+      ctx.restore();
+    }
     ctx.restore();
   }
 }
@@ -290,9 +333,9 @@ function drawEye(ctx, s, look, glow) {
   ctx.restore();
 }
 
-function drawHorns(ctx, s, k) {
+function drawHorns(ctx, s, k, grow = 1) {
   const { up, fwd } = headFrame(s);
-  const r = s.headR;
+  const r = s.headR * grow;
   const at = (u, f) => ({ x: s.head.x + up.x * u + fwd.x * f, y: s.head.y + up.y * u + fwd.y * f });
   ctx.fillStyle = '#0d0b0e';
   for (const side of [-0.35, 0.25]) {
@@ -361,7 +404,7 @@ export function weaponShape(kind, scale) {
   return kind === 'katana' ? { length: 68 * scale } : { length: 92 * scale };
 }
 
-function drawWeapon(ctx, kind, grip, angleDeg, k, glow) {
+function drawWeapon(ctx, kind, grip, angleDeg, k, glow, glowColor = '#3a9bff') {
   const a = (angleDeg * Math.PI) / 180;
   const dir = { x: Math.sin(a), y: -Math.cos(a) };
   const side = { x: Math.cos(a), y: Math.sin(a) };
@@ -373,7 +416,7 @@ function drawWeapon(ctx, kind, grip, angleDeg, k, glow) {
     stroke(ctx, [at(-9), at(4)], 4.5, '#1a1a1f');
     stroke(ctx, [at(4, -5), at(4, 5)], 3, '#c9a227');
     if (glow > 0) {
-      ctx.shadowColor = '#3a9bff';
+      ctx.shadowColor = glowColor;
       ctx.shadowBlur = 18 * glow;
     }
     ctx.beginPath();
@@ -412,6 +455,46 @@ function drawWeapon(ctx, kind, grip, angleDeg, k, glow) {
     ctx.stroke();
   }
   ctx.restore();
+}
+
+/** A jagged crystal of ice around a frozen figure, `amount` from 0 (forming) to 1 (whole). */
+function drawIceShell(ctx, s, k, amount) {
+  const points = [s.head, s.chest, s.hip, s.front.hand, s.back.hand, s.frontLeg.ankle, s.backLeg.ankle, s.front.elbow, s.back.elbow];
+  const xs = points.map(p => p.x);
+  const ys = points.map(p => p.y);
+  const pad = 14 * k;
+  const left = Math.min(...xs) - pad;
+  const right = Math.max(...xs) + pad;
+  const top = Math.min(...ys) - s.headR - pad;
+  const bottom = Math.max(...ys) + 4;
+  // It grows up from the feet as it forms.
+  const rise = bottom - (bottom - top) * amount;
+  const outline = [
+    [left + 6, bottom], [left - 4, bottom - (bottom - top) * 0.3], [left + 8, bottom - (bottom - top) * 0.55],
+    [left, bottom - (bottom - top) * 0.8], [left + (right - left) * 0.3, top], [left + (right - left) * 0.55, top + 10],
+    [left + (right - left) * 0.75, top - 6], [right, bottom - (bottom - top) * 0.75], [right - 8, bottom - (bottom - top) * 0.45],
+    [right + 4, bottom - (bottom - top) * 0.2], [right - 4, bottom],
+  ].map(([x, y]) => [x, Math.max(y, rise)]);
+  ctx.beginPath();
+  outline.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+  ctx.closePath();
+  const fill = ctx.createLinearGradient(left, top, right, bottom);
+  fill.addColorStop(0, 'rgba(225,245,255,0.55)');
+  fill.addColorStop(1, 'rgba(150,215,255,0.35)');
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // A few facet lines catching the light.
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(left + (right - left) * 0.3, Math.max(top + 20, rise));
+  ctx.lineTo(left + (right - left) * 0.45, bottom - 20);
+  ctx.moveTo(left + (right - left) * 0.7, Math.max(top + 30, rise));
+  ctx.lineTo(left + (right - left) * 0.6, bottom - 40);
+  ctx.stroke();
 }
 
 /** Lighten (positive) or darken (negative) a hex colour. */

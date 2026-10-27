@@ -15,7 +15,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { Actor } from './characters.mjs';
-import { Effects, drawSpeech } from './effects.mjs';
+import { Effects, drawSpeech, random } from './effects.mjs';
 import { lowestPoint, mix, solve } from './rig.mjs';
 import { drawForeground, drawPlanePillar, drawStage, GROUND } from './stage.mjs';
 import { EASE } from './timeline.mjs';
@@ -89,6 +89,7 @@ function cameraAt(keys, t, actors, view) {
     dim: lerp('dim', 0),
     bars: lerp('bars', 0),
     fade: lerp('fade', 0),
+    grade: lerp('grade', 0),
   };
 }
 
@@ -115,6 +116,8 @@ export async function render(scene, options) {
 
   // Scene time stands still during a hit-stop while video time runs on.
   let sceneTime = 0;
+  // The scene time the camera last looked at, to spot a cut key passing.
+  let cameraTime = -1;
   let freeze = 0;
   let videoTime = 0;
   const shakes = [];
@@ -151,8 +154,8 @@ export async function render(scene, options) {
       }
       applyRecoil(state, recoils.get(id), sceneTime);
       const before = actor.place;
-      state.y = GROUND - lowestPoint(solve(state.pose, actor.look.scale)) - state.air;
-      feet.get(id).apply(state, actor.look.scale, sceneTime);
+      state.y = GROUND - lowestPoint(solve(state.pose, actor.scaleOf(state))) - state.air;
+      feet.get(id).apply(state, actor.scaleOf(state), sceneTime);
       state.vx = before && step > 0 ? (state.x - before.x) / dt : 0;
       actor.update(state, Math.max(step, 0.0001));
     }
@@ -167,7 +170,7 @@ export async function render(scene, options) {
     for (const actor of actors.values()) {
       if (actor.state.aura > 0.05 && frame % 2 === 0) {
         const chest = actor.point('chest');
-        effects.embers(chest.x, chest.y, { color: actor.state.auraColor ?? '#ff3050', count: Math.ceil(actor.state.aura * 3), spread: 50 * actor.look.scale });
+        effects.embers(chest.x, chest.y, { color: actor.state.auraColor ?? '#ff3050', count: Math.ceil(actor.state.aura * 3), spread: 50 * actor.scaleOf() });
       }
       if (actor.state.aura > 0.75 && frame % 5 === 0 && effects.sprites.has('lightning-effect')) {
         const chest = actor.point('chest');
@@ -175,16 +178,35 @@ export async function render(scene, options) {
         effects.sprite('lightning-effect', chest.x + (r() - 0.5) * 60, chest.y + (r() - 0.3) * 90, {
           scale: 0.16 + r() * 0.12,
           rotation: r() * Math.PI * 2,
-          tint: actor.state.auraColor === '#a070ff' ? '#c9a6ff' : '#ff3048',
+          tint: actor.state.auraColor ?? '#ff3048',
           additive: true,
           speed: 2.2,
         });
+      }
+    }
+    // A figure in demon form crackles with red lightning running over its body.
+    for (const actor of actors.values()) {
+      if ((actor.state.demon ?? 0) > 0.2 && (actor.state.frozen ?? 0) < 0.5 && frame % 3 === 0) {
+        const parts = ['chest', 'head', 'fist', 'backFist', 'foot', 'backFoot', 'hip'];
+        const a = actor.point(parts[Math.floor(effects.rand() * parts.length)]);
+        const b = actor.point(parts[Math.floor(effects.rand() * parts.length)]);
+        if (Math.hypot(a.x - b.x, a.y - b.y) > 20) effects.bolt(a.x, a.y, b.x, b.y, { width: 2, life: 0.08, branches: 1, jag: 10 });
       }
     }
     effects.update(freeze > 0 ? dt : step);
 
     // Camera, with a little lag when it follows, plus shake.
     const cam = cameraAt(scene.camera, sceneTime, actors, view);
+    // A cut: the camera jumps to the new shot instead of gliding, and old trails are dropped.
+    if (scene.camera.some(key => key.cut && key.t > cameraTime + 1e-9 && key.t <= sceneTime + 1e-9)) {
+      smoothX = smoothY = smoothZoom = null;
+      for (const h of history.values()) {
+        h.ghosts.length = 0;
+        h.trail.length = 0;
+      }
+      for (const trail of eyes.values()) trail.length = 0;
+    }
+    cameraTime = sceneTime;
     smoothX = smoothX === null ? cam.x : smoothX + (cam.x - smoothX) * 0.18;
     smoothZoom = smoothZoom === null ? cam.zoom : smoothZoom + (cam.zoom - smoothZoom) * 0.12;
     cam.zoom = smoothZoom;
@@ -216,7 +238,9 @@ export async function render(scene, options) {
       h.trail.length = Math.min(h.trail.length, 6);
       if (actor.look.horns) {
         const trail = eyes.get(id);
-        trail.unshift(actor.eye());
+        const eye = actor.eye();
+        if (trail[0] && Math.hypot(eye.x - trail[0].x, eye.y - trail[0].y) > 150) trail.length = 0;
+        trail.unshift(eye);
         trail.length = Math.min(trail.length, 9);
         h.eyes = trail;
       }
@@ -226,7 +250,7 @@ export async function render(scene, options) {
     if (!wantSheet || sheetHit) {
       paint(ctx, { scene, cam, view, actors, effects, history, speech, sceneTime, videoTime, stage });
       const shakeTilt = (Math.abs(shakeX) + Math.abs(shakeY)) * 0.06 * Math.sign(shakeX || 1);
-      const finished = finish(canvas, output, post, videoTime, decaying(post.tilts, videoTime) + shakeTilt);
+      const finished = finish(canvas, output, post, videoTime, decaying(post.tilts, videoTime) + shakeTilt, cam.grade);
       if (encoder) await encoder.write(finished.data());
       else {
         while (wantSheet.length && sceneTime + 1e-9 >= wantSheet[0]) {
@@ -344,9 +368,10 @@ function fire(event, { actors, effects, shakes, speech, sounds, videoTime, scene
     case 'impact': {
       const p = at(actors, event);
       const by = attacker(actors, event, p);
-      effects.impact(p.x, p.y, { kind: event.kind, size: event.size ?? 1, angle: event.angle ?? 0, tint: by?.look.signature });
+      effects.impact(p.x, p.y, { kind: event.kind, size: event.size ?? 1, angle: event.angle ?? 0, tint: by?.signature() });
       const target = victim(actors, event, p, by);
-      if (target && by) {
+      // recoil: false is a blow the target shrugs off.
+      if (target && by && event.recoil !== false) {
         const size = event.size ?? 1;
         const strength = ['block', 'clang'].includes(event.kind) ? 0.65 : size < 1.3 ? 0.6 + 0.25 * size : Math.min(1.6, 1.1 + 0.2 * (size - 1.3));
         recoils.get(target.id).push({ start: sceneTime, strength, dir: Math.sign(target.place.x - by.place.x) || -target.place.facing });
@@ -379,7 +404,9 @@ function fire(event, { actors, effects, shakes, speech, sounds, videoTime, scene
     case 'slashLine': {
       const from = at(actors, { at: event.at, ox: event.from[0], oy: event.from[1] });
       const to = at(actors, { at: event.at, ox: event.to[0], oy: event.to[1] });
-      effects.slashLine(from.x, from.y, to.x, to.y, event);
+      // Unless the scene says otherwise, the cut glows in the colour of whoever made it.
+      const glow = event.glow ?? attacker(actors, event, from)?.signature();
+      effects.slashLine(from.x, from.y, to.x, to.y, { ...event, ...(glow ? { glow } : {}) });
       sound('slash', 1.2);
       break;
     }
@@ -413,6 +440,129 @@ function fire(event, { actors, effects, shakes, speech, sounds, videoTime, scene
       if (event.ground) p.y = GROUND;
       const facing = event.at ? actors.get(event.at.split('.')[0]).place.facing : 1;
       effects.sprite(event.name, p.x, p.y, { ...event, flip: (event.flip ?? 1) * (event.faceActor ? facing : 1) });
+      break;
+    }
+    case 'bolt': {
+      const from = at(actors, { at: event.from });
+      // A bolt can end at a figure or at a point in the world.
+      const to = typeof event.to === 'string' ? at(actors, { at: event.to }) : event.to;
+      effects.bolt(from.x, from.y, to.x, to.y, event);
+      sound('zap', event.gain ?? 1);
+      break;
+    }
+    case 'skyBolt': {
+      const p = at(actors, event);
+      effects.skyBolt(p.x, event);
+      effects.flash({ color: '255,90,110', life: 0.12, strength: 0.35 });
+      shakes.push({ start: videoTime, amount: 7, dur: 0.25 });
+      sound('thunder', event.gain ?? 1);
+      break;
+    }
+    case 'iceSpikes': {
+      const p = at(actors, event);
+      effects.iceSpikes(p.x, event.dir ?? 1, event);
+      sound('ice', event.gain ?? 1);
+      break;
+    }
+    case 'iceWall': {
+      const p = at(actors, event);
+      effects.iceWall(p.x, event);
+      sound('ice', event.gain ?? 1);
+      break;
+    }
+    case 'frost': {
+      const p = at(actors, event);
+      effects.frost(p.x, p.y, event);
+      break;
+    }
+    case 'frostFloor': {
+      const p = at(actors, event);
+      effects.frostFloor(p.x, event);
+      break;
+    }
+    case 'shatter': {
+      const p = at(actors, event);
+      effects.shards(p.x, p.y, { count: event.count ?? 30, size: event.size ?? 1.3 });
+      effects.frost(p.x, p.y, { count: 24, spread: 50, speed: 140 });
+      sound('shatter', event.gain ?? 1.2);
+      break;
+    }
+    case 'beamClash': {
+      // Ice from one fist, red lightning from the other, meeting where `push`
+      // says: [fraction of the clash, 0 at the ice fist to 1 at the lightning fist].
+      const life = event.dur ?? 1;
+      const push = event.push ?? [[0, 0.5], [1, 0.5]];
+      const meetAt = u => {
+        for (let i = 1; i < push.length; i += 1) {
+          const [a, pa] = push[i - 1];
+          const [b, pb] = push[i];
+          if (u <= b) return pa + ((pb - pa) * (u - a)) / (b - a || 1);
+        }
+        return push[push.length - 1][1];
+      };
+      const ice = actors.get(event.ice ?? 'kade');
+      const storm = actors.get(event.storm ?? 'vorthak');
+      const ends = age => {
+        const a = ice.point('fist');
+        const b = storm.point('fist');
+        const m = meetAt(age / life);
+        return { a, b, m: { x: a.x + (b.x - a.x) * m, y: a.y + (b.y - a.y) * m } };
+      };
+      effects.world.push({
+        age: 0,
+        life,
+        step() {
+          const { m } = ends(this.age);
+          effects.sparks(m.x, m.y, { count: 2, color: '#ff8a8a', speed: 280 });
+          effects.frost(m.x, m.y, { count: 2, spread: 10, speed: 140 });
+        },
+        draw(ctx) {
+          const { a, b, m } = ends(this.age);
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.lineCap = 'round';
+          // The ice beam: a thick, steady shaft of pale blue.
+          for (const [color, width, alpha] of [['#5fd4ff', 26, 0.35], ['#9fe8ff', 14, 0.8], ['#ffffff', 5, 1]]) {
+            ctx.strokeStyle = color;
+            ctx.globalAlpha = alpha;
+            ctx.lineWidth = width;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(m.x, m.y);
+            ctx.stroke();
+          }
+          // The lightning: jagged, re-forking every frame.
+          const r = random(Math.floor(this.age * 40) + 17);
+          const steps = Math.max(3, Math.round(Math.hypot(b.x - m.x, b.y - m.y) / 16));
+          const line = [];
+          for (let i = 0; i <= steps; i += 1) {
+            const u = i / steps;
+            const off = i === 0 || i === steps ? 0 : (r() - 0.5) * 30;
+            line.push([m.x + (b.x - m.x) * u, m.y + (b.y - m.y) * u + off]);
+          }
+          for (const [color, width, alpha] of [['#ff2a3a', 18, 0.35], ['#ff4a4a', 8, 0.85], ['#ffe6e6', 3, 1]]) {
+            ctx.strokeStyle = color;
+            ctx.globalAlpha = alpha;
+            ctx.lineWidth = width;
+            ctx.beginPath();
+            line.forEach(([x, y], j) => (j ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+            ctx.stroke();
+          }
+          // Where they meet, a blinding knot of light.
+          const pulse = 1 + Math.sin(this.age * 60) * 0.15;
+          const knot = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, 60 * pulse);
+          knot.addColorStop(0, 'rgba(255,255,255,1)');
+          knot.addColorStop(0.35, 'rgba(255,200,230,0.7)');
+          knot.addColorStop(1, 'rgba(255,120,160,0)');
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = knot;
+          ctx.beginPath();
+          ctx.arc(m.x, m.y, 60 * pulse, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        },
+      });
+      sound('energy', 1);
       break;
     }
     case 'breakPillar': {
@@ -460,7 +610,7 @@ function paint(ctx, { scene, cam, view, actors, effects, history, speech, sceneT
     const lift = Math.min(1, s.air / 250);
     ctx.fillStyle = `rgba(30,30,40,${0.22 * (1 - lift) * (s.opacity ?? 1)})`;
     ctx.beginPath();
-    ctx.ellipse(s.x, GROUND + 2, 34 * actor.look.scale * (1 - lift * 0.5), 6, 0, 0, Math.PI * 2);
+    ctx.ellipse(s.x, GROUND + 2, 34 * actor.scaleOf() * (1 - lift * 0.5), 6, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -477,9 +627,9 @@ function paint(ctx, { scene, cam, view, actors, effects, history, speech, sceneT
     if (s.aura > 0.02) {
       const chest = actor.point('chest');
       const pulse = 1 + Math.sin(videoTime * 14) * 0.06;
-      const radius = 120 * actor.look.scale * pulse * (0.6 + s.aura * 0.6);
+      const radius = 120 * actor.scaleOf() * pulse * (0.6 + s.aura * 0.6);
       const glow = ctx.createRadialGradient(chest.x, chest.y, 0, chest.x, chest.y, radius);
-      const c = s.auraColor === '#a070ff' ? '160,110,255' : '255,30,60';
+      const c = rgb(s.auraColor ?? '#ff1e3c');
       glow.addColorStop(0, `rgba(${c},${0.55 * s.aura})`);
       glow.addColorStop(1, `rgba(${c},0)`);
       ctx.fillStyle = glow;
@@ -491,10 +641,10 @@ function paint(ctx, { scene, cam, view, actors, effects, history, speech, sceneT
     drawSmear(ctx, actor, h);
 
     // A ribbon behind a swinging weapon, in the fighter's colour.
-    drawTrail(ctx, h.trail, rgb(actor.look.signature));
+    drawTrail(ctx, h.trail, rgb(actor.signature()));
 
     actor.draw(ctx, { glow: s.aura });
-    if (h.eyes && s.aura > 0.3) drawEyeTrail(ctx, h.eyes, s.aura, actor.look.scale);
+    if (h.eyes && s.aura > 0.3) drawEyeTrail(ctx, h.eyes, s.aura, actor.scaleOf());
   }
 
   effects.drawWorld(ctx);
@@ -548,13 +698,14 @@ function decaying(list, now) {
 
 /**
  * Finish a frame: tilt the camera, flash impact frames (stark inverted
- * black and white, the anime way), and split the colour channels on big hits.
+ * black and white, the anime way), grade flashbacks, and split the colour
+ * channels on big hits.
  */
-function finish(canvas, output, post, now, tiltDegrees) {
+function finish(canvas, output, post, now, tiltDegrees, grade = 0) {
   const split = decaying(post.splits, now);
   const impact = post.impactFrames > 0;
   const flip = post.impactIndex % 2 === 0;
-  if (Math.abs(tiltDegrees) < 0.05 && split < 0.5 && !impact) return canvas;
+  if (Math.abs(tiltDegrees) < 0.05 && split < 0.5 && !impact && grade < 0.01) return canvas;
   const { width, height } = canvas;
   const ctx = output.getContext('2d');
   ctx.save();
@@ -570,6 +721,9 @@ function finish(canvas, output, post, now, tiltDegrees) {
   ctx.translate(-width / 2, -height / 2);
   if (impact) {
     ctx.filter = flip ? 'grayscale(1) invert(1) contrast(7)' : 'grayscale(1) contrast(9) brightness(1.2)';
+  } else if (grade >= 0.01) {
+    // An old-film look for flashbacks: faded, warm and a touch soft.
+    ctx.filter = `sepia(${0.85 * grade}) saturate(${1 - 0.5 * grade}) contrast(${1 - 0.12 * grade}) brightness(${1 - 0.08 * grade})`;
   }
   ctx.drawImage(canvas, 0, 0);
   ctx.restore();
@@ -655,7 +809,9 @@ function drawSmear(ctx, actor, h) {
   const travel = Math.max(...now.reach.map((point, i) => Math.hypot(point.x - before.reach[i].x, point.y - before.reach[i].y)));
   const body = Math.hypot(now.state.x - before.state.x, now.state.y - before.state.y);
   if (travel < 32 && body < 22) return;
-  const color = actor.look.signature;
+  // A jump across the stage between frames is a cut between shots, not motion.
+  if (body > 160) return;
+  const color = actor.signature();
   const steps = travel > 70 || body > 40 ? 4 : 2;
   for (let i = 1; i <= steps; i += 1) {
     const f = i / (steps + 1);
@@ -687,7 +843,7 @@ function drawTrail(ctx, trail, rgb) {
     if (!a || !b) break;
     const travel = Math.hypot(a.tip.x - b.tip.x, a.tip.y - b.tip.y);
     // Only a real swing leaves a ribbon, not a weapon carried along at a run.
-    if (travel < 28) continue;
+    if (travel < 28 || travel > 220) continue;
     const midA = { x: a.grip.x + (a.tip.x - a.grip.x) * 0.6, y: a.grip.y + (a.tip.y - a.grip.y) * 0.6 };
     const midB = { x: b.grip.x + (b.tip.x - b.grip.x) * 0.6, y: b.grip.y + (b.tip.y - b.grip.y) * 0.6 };
     ctx.fillStyle = `rgba(${rgb},${0.5 * (1 - i / trail.length) * Math.min(1, (travel - 28) / 40)})`;

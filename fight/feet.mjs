@@ -59,6 +59,12 @@ export class FootLock {
 
   /** Pin planted feet for this frame by re-bending the legs in `state.pose`. */
   apply(state, scale, now) {
+    // A figure moved across the stage between frames (a cut between shots) plants afresh.
+    if (this.lastX !== undefined && Math.abs(state.x - this.lastX) > 120) {
+      this.feet = { frontLeg: null, backLeg: null };
+      this.previous = { frontLeg: null, backLeg: null };
+    }
+    this.lastX = state.x;
     const grounded = state.air < 1 && Math.abs(state.pose.rot ?? 0) < 25;
     const keyed = solve(state.pose, scale);
     const world = point => ({ x: state.x + point.x * state.facing, y: state.y + point.y });
