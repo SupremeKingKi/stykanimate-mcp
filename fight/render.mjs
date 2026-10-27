@@ -565,6 +565,25 @@ function fire(event, { actors, effects, shakes, speech, sounds, videoTime, scene
       sound('energy', 1);
       break;
     }
+    case 'soul': {
+      // A ghost of the figure, as it is right now, rising out of its body, growing and fading.
+      const actor = actors.get(event.who);
+      const ghost = { ...actor.state, pose: { ...actor.state.pose }, frozen: 0, opacity: 1, auraColor: event.color ?? '#ff2040' };
+      const color = event.color ?? '#ff2040';
+      effects.world.push({
+        age: 0,
+        life: event.life ?? 1.6,
+        draw(ctx, t) {
+          const ease = 1 - (1 - t) ** 2;
+          const state = { ...ghost, y: ghost.y - ease * (event.rise ?? 170), size: (ghost.size ?? 1) * (1 + ease * (event.grow ?? 0.35)) };
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          actor.drawPose(ctx, state, { silhouette: color, alpha: 0.75 * (1 - t) ** 1.5, glow: 1 });
+          ctx.restore();
+        },
+      });
+      break;
+    }
     case 'breakPillar': {
       // The standing pillar nearest the blow shatters.
       const pillar = stage.pillars.filter(p => p.brokenAt === null).sort((a, b) => Math.abs(a.x - event.x) - Math.abs(b.x - event.x))[0];

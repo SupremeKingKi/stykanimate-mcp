@@ -238,7 +238,7 @@ export class Actor {
     if (!silhouette) {
       if (look.horns) drawHorns(ctx, s, k, 1 + 0.5 * (this.state.demon ?? 0));
       if (look.hair) drawHair(ctx, s, k, look.hair);
-      drawEye(ctx, s, look, glow);
+      drawEye(ctx, s, look, glow, this.state.eyes ?? 1);
     }
 
     for (const pass of passes) {
@@ -316,15 +316,17 @@ function headFrame(s) {
   return { up: { x: Math.sin(a), y: -Math.cos(a) }, fwd: { x: Math.cos(a), y: Math.sin(a) } };
 }
 
-function drawEye(ctx, s, look, glow) {
+function drawEye(ctx, s, look, glow, lit = 1) {
+  if (lit <= 0.01) return;
   const { up, fwd } = headFrame(s);
   const r = s.headR;
   const x = s.head.x + fwd.x * r * 0.5 + up.x * r * 0.12;
   const y = s.head.y + fwd.y * r * 0.5 + up.y * r * 0.12;
   ctx.save();
+  ctx.globalAlpha *= Math.min(1, lit);
   if (look.horns) {
     ctx.shadowColor = '#ff1a1a';
-    ctx.shadowBlur = 10 + glow * 18;
+    ctx.shadowBlur = (10 + glow * 18) * lit;
   }
   ctx.fillStyle = look.eye;
   ctx.beginPath();

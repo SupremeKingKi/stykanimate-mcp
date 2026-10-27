@@ -10,7 +10,7 @@ npm run fight
 
 This writes `fight/out/kade-sora-vs-vorthak.mp4` (1280×720, 30 fps, with sound). It needs `ffmpeg` on the PATH, or set `FFMPEG` to its path, plus the optional `@napi-rs/canvas` package this repo already uses for rendering.
 
-`scenes/duel.mjs` is a 61-second one-on-one, Kade against Vorthak, in two parts. A storyboarded intro tells why they fight. A year ago, Vorthak beat Kade without trying. Kade trained until his colour ignited from grey to blue, then came back, and Vorthak went from bored to taking him seriously. Then the fight travels from the hall, through a pillar and the ruined end of the hall, out onto an open terrace. In part two (`scenes/duel-part2.mjs`), Vorthak rises again as a demon spewing red lightning and overpowers Kade, until Kade finds ice, wins a beam clash, freezes him solid and shatters the demon out of him. `npm run duel` writes `fight/out/kade-vs-vorthak.mp4`.
+`scenes/duel.mjs` is a 61-second one-on-one, Kade against Vorthak, in two parts. A storyboarded intro tells why they fight. A year ago, Vorthak beat Kade without trying. Kade trained until his colour ignited from grey to blue, then came back, and Vorthak went from bored to taking him seriously. Then the fight travels from the hall, through a pillar and the ruined end of the hall, out onto an open terrace. In part two (`scenes/duel-part2.mjs`), Vorthak rises again as a demon spewing red lightning and overpowers Kade, until Kade finds ice, wins a beam clash, freezes him solid and shatters the demon out of him. His defeat plays in silence, with the music cut out. `npm run duel` writes `fight/out/kade-vs-vorthak.mp4`.
 
 ## Pieces
 
@@ -61,8 +61,8 @@ A scene can lay out the stage with `stage: { layout: { ruin: [from, to] }, pilla
 
 ## Storytelling
 
-- **Transformations:** keys can set `size` (grow or shrink a figure), `demon` (0 to 1: molten red veins, bigger horns, lightning crawling over the body) and `frozen` (0 to 1: frost over the body, then a shell of ice, which also puts out a demon's fire).
-- **Elements:** the events `bolt` (lightning between two points), `skyBolt` (lightning striking the floor), `iceWall`, `iceSpikes` (bursting up along the floor), `frost`, `frostFloor`, `shatter` (ice breaking off a body) and `beamClash` (an ice beam and a lightning beam meeting, pushed back and forth by `push`).
+- **Transformations:** keys can set `size` (grow or shrink a figure), `demon` (0 to 1: molten red veins, bigger horns, lightning crawling over the body) and `frozen` (0 to 1: frost over the body, then a shell of ice, which also puts out a demon's fire) and `eyes` (1 lit, 0 gone out).
+- **Elements:** the events `bolt` (lightning between two points), `skyBolt` (lightning striking the floor), `iceWall`, `iceSpikes` (bursting up along the floor), `frost`, `frostFloor`, `shatter` (ice breaking off a body) `beamClash` (an ice beam and a lightning beam meeting, pushed back and forth by `push`) and `soul` (a red ghost of a figure tearing out of its body, rising and fading).
 - **Cuts:** a camera key with `cut: true` jumps to the new shot instead of gliding, and drops motion trails. Figures can be keyed with `ease: 'hold'` to be somewhere else in the next shot. Feet, smears and trails ignore the jump.
 - **Grade:** a camera key's `grade` (0 to 1) gives the picture a faded, sepia old-film look, for flashbacks.
 - **A changing colour:** a key's `signature` replaces the character's own colour (scarf, smears, trails, hit sparks) from that key on. `null` goes back to their own. Auras take any `auraColor`.
@@ -81,7 +81,7 @@ Hits, blocks, clangs, slashes, whooshes, landings, booms, roars, growls, thunder
 
 Most are CC0. Two OpenGameArt packs are CC-BY 3.0 and must be credited: qubodup's ice and electricity sounds, and InspectorJ's close thunder. [CREDITS.md](assets/sfx/CREDITS.md) lists every pack, and the duel's end card credits the two that need it.
 
-Each named sound layers one or more recordings, sometimes over the synthesised sound for weight. A layer draws from a pool that can span several packs, and each time the sound plays it picks a random variant at a slightly random pitch. Long recordings can be trimmed. Without the samples, the synthesised sounds play on their own.
+Each named sound layers one or more recordings, sometimes over the synthesised sound for weight. A layer draws from a pool that can span several packs, and each time the sound plays it picks a random variant at a slightly random pitch. Long recordings can be trimmed, and a layer's `pitch` below 1 plays it slower and deeper. Vorthak's defeat has its own sounds: heartbeats, a reversed swell, a doubled shatter, a slowed death cry, a ringing in the ears and body falls. Without the samples, the synthesised sounds play on their own.
 
 ## Using a song
 

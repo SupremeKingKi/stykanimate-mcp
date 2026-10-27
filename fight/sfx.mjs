@@ -83,6 +83,26 @@ const RECIPES = {
     { files: ['oga/thunder-very-close', 'Thunder'], gain: 1.3, max: 2.5 },
     { files: ['sci-fi-sounds', 'explosionCrunch_'], gain: 0.4 },
   ],
+  // A death cry: creature death sounds slowed right down.
+  die: [
+    { files: [['oga/creature-sfx-2', 'die_'], ['oga/rpg-sfx', 'creature_die']], gain: 1.4, pitch: 0.62 },
+    { files: [['oga/creature-sfx', 'roar_'], ['oga/creature-sfx-2', 'roar_']], gain: 0.7, pitch: 0.55 },
+    { synth: 'roar', gain: 0.25 },
+  ],
+  // The ice and the demon breaking at once.
+  bigShatter: [
+    { files: ['oga/ice-shatters', 'LedasLuzta'], gain: 1.4 },
+    { files: ['oga/ice-shatters', 'LedasLuzta'], gain: 1, pitch: 0.7 },
+    { files: ['oga/breaking-and-falling', 'bfh1_glass_breaking'], gain: 0.8 },
+    { synth: 'boom', gain: 0.6 },
+  ],
+  bodyFall: [
+    { files: [['oga/breaking-and-falling', 'bfh1_falling'], ['impact-sounds', 'impactSoft_heavy_']], gain: 1.1, pitch: 0.8, max: 1.2 },
+    { synth: 'boom', gain: 0.35 },
+  ],
+  heartbeat: [{ synth: 'heartbeat', gain: 1 }],
+  suck: [{ synth: 'suck', gain: 1 }],
+  ring: [{ synth: 'ring', gain: 1 }],
   zap: [
     { files: ['oga/ice-electricity-magic', 'qubodupElectricityDamage'], gain: 1, max: 1.2 },
     { files: ['sci-fi-sounds', 'laserLarge_'], gain: 0.4 },
@@ -166,7 +186,8 @@ export function voice(name, variants, synthBank, rand) {
     if (!options.length) continue;
     recorded = true;
     const pick = options[Math.floor(rand() * options.length)];
-    parts.push([repitch(pick, 0.94 + rand() * 0.12), layer.gain]);
+    // A layer's pitch below 1 plays it slower and deeper.
+    parts.push([repitch(pick, (layer.pitch ?? 1) * (0.94 + rand() * 0.12)), layer.gain]);
   }
   if (!recorded) return null;
   const length = Math.max(...parts.map(([signal]) => signal.length));
